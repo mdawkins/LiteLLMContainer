@@ -5,25 +5,25 @@ LiteLLM proxy stack for routing AI tool requests (Claude Code, VS Code extension
 ## Architecture
 
 ```
-┌──────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Client     │────▶│  litellm-nginx   │────▶│  litellm-proxy   │
-│ (Claude CLI, │     │  (TLS Terminator │     │  (LiteLLM Proxy) │
-│  VS Code,    │     │   port 443)      │     │   port 4000)     │
-│  Desktop)    │     └──────────────────┘     └────────┬────────┘
-└──────────────┘        bridge: internal_net    host network (IMDS)
-                                                        │
-                                                        ▼
-                                               ┌──────────────────┐
-                                               │   litellm-db      │
-                                               │  (PostgreSQL 18)  │
-                                               │  127.0.0.1:5432   │
-                                               └──────────────────┘
+┌──────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────────────────┐
+│   Client     │────▶│  litellm-nginx   │────▶│  litellm-proxy   │────▶│   Amazon Bedrock     │
+│ (Claude CLI, │     │  (TLS Terminator │     │  (LiteLLM Proxy) │     │  (Converse API —     │
+│  VS Code,    │     │   port 443)      │     │   port 4000)     │     │   cross-region       │
+│  Desktop)    │     └──────────────────┘     └────────┬────────┘     │   inference profiles)│
+└──────────────┘        bridge: internal_net    host network (IMDS)   └──────────────────────┘
+                                                         │                    AWS region
+                                                         ▼
+                                                ┌──────────────────┐
+                                                │   litellm-db      │
+                                                │  (PostgreSQL 18)  │
+                                                │  127.0.0.1:5432   │
+                                                └──────────────────┘
 ```
 
 | Service | Container Name | Image | Network | Purpose |
 |---------|---------------|-------|---------|---------|
 | `litellm-db` | `litellm-db` | `postgres:18` | `internal_net` bridge | Persistent storage for user keys, budgets, rate limits, token usage |
-| `litellm-proxy` | `litellm-proxy` | `ghcr.io/berriai/litellm:main-latest` | `host` | Translates OpenAI/Anthropic API calls to Amazon Bedrock; enforces auth and throttling; reaches IMDS directly for IAM credentials |
+| `litellm-proxy` | `litellm-proxy` | `ghcr.io/berriai/litellm:main-latest` | `host` | Translates OpenAI/Anthropic API calls to Amazon Bedrock (Converse API); enforces auth and throttling; reaches IMDS directly for IAM credentials |
 | `litellm-nginx` | `litellm-nginx` | `nginx:alpine` | `internal_net` bridge | TLS termination on port 443; proxies to `host.containers.internal:4000` |
 
 ## Directory Structure
