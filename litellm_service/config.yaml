@@ -1,0 +1,43 @@
+model_list:
+  # 1. Claude 3.5 Sonnet (Primary Coding Model)
+  - model_name: claude-3-5-sonnet
+    litellm_params:
+      model: bedrock/invoke/us.anthropic.claude-3-5-sonnet-20241022-v2:0
+      aws_region_name: us-east-1
+      cache_control_injection_points:
+        - location: "user"
+        - location: "system"
+
+  - model_name: claude-3-5-sonnet-v2
+    litellm_params:
+      model: bedrock/invoke/us.anthropic.claude-3-5-sonnet-20241022-v2:0
+      aws_region_name: us-east-1
+      cache_control_injection_points:
+        - location: "user"
+        - location: "system"
+
+  # 2. Claude 3.5 Haiku (Fast/Budget Coding Model)
+  - model_name: claude-3-5-haiku
+    litellm_params:
+      model: bedrock/invoke/us.anthropic.claude-3-5-haiku-20241022-v1:0
+      aws_region_name: us-east-1
+      cache_control_injection_points:
+        - location: "user"
+        - location: "system"
+
+  # 3. Standard Fallback Aliases for IDE Extensions
+  - model_name: anthropic.claude-3-5-sonnet
+    litellm_params:
+      model: bedrock/invoke/us.anthropic.claude-3-5-sonnet-20241022-v2:0
+      aws_region_name: us-east-1
+      cache_control_injection_points:
+        - location: "user"
+        - location: "system"
+
+router_settings:
+  routing_strategy: simple-shuffle
+  redis_ttl: 3600
+
+litellm_settings:
+  drop_params: true
+  drop_header: ["anthropic-beta"]

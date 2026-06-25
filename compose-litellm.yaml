@@ -1,0 +1,58 @@
+version: "3.8"
+services:
+
+  litellm-db:
+    image: postgres:18
+    container_name: litellm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: litellm
+      POSTGRES_USER: proxy_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ${VOLUMES}/litellm_pgvol/data:/var/lib/postgresql:z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proxy_admin -d litellm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - internal_net
+
+  litellm-proxy:
+    container_name: litellm-proxy
+    build:
+      context: ./litellm_service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://proxy_admin:${POSTGRES_PASSWORD}@litellm-db:5432/litellm
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN}
+    depends_on:
+      litellm-db:
+        condition: service_healthy
+    networks:
+      - internal_net
+
+  litellm-nginx:
+    container_name: litellm-nginx
+    build:
+      context: ./nginx_service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - litellm-proxy
+    networks:
+      - internal_net
+
+networks:
+  internal_net:
+    external: true
+    name: internal_net
