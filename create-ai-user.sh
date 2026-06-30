@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/.env"
 
-PROXY_URL="https://localhost/key/generate"
+PROXY_URL="https://${LITELLM_BASE_URL}/key/generate" #"https://localhost/key/generate"
 
 usage() {
     echo "Usage: $0 -u <username> -b <budget_usd> -d <duration_days> [-r <rpm>] [-t <tpm>]"
