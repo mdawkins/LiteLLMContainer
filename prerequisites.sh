@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "============================================"
-echo "LLM-Lite Container Stack - Prerequisites"
+echo "LiteLLM Container Stack - Prerequisites"
 echo "============================================"
 
 # --- 1. Verify Environment Variables ---

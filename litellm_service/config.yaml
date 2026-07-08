@@ -1,5 +1,14 @@
 model_list:
 
+  # Claude Sonnet 5 — near-Opus intelligence, primary coding model
+  - model_name: claude-sonnet-5
+    litellm_params:
+      model: bedrock/us.anthropic.claude-sonnet-5
+      aws_region_name: us-east-1
+      cache_control_injection_points:
+        - location: "user"
+        - location: "system"
+
   # Claude Opus 4.8 — most capable, primary reasoning model
   - model_name: claude-opus-4-8
     litellm_params:

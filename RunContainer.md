@@ -1,4 +1,4 @@
-# LLM-Lite Container Stack — LiteLLM Proxy for Amazon Bedrock
+# LiteLLM Container Stack — LiteLLM Proxy for Amazon Bedrock
 
 ## Prerequisites
 
@@ -121,6 +121,7 @@ export ANTHROPIC_API_KEY="sk-generated-user-token"
 
 | Model alias | Bedrock profile |
 |-------------|----------------|
+| `claude-sonnet-5` | `us.anthropic.claude-sonnet-5` |
 | `claude-opus-4-8` | `us.anthropic.claude-opus-4-8` |
 | `claude-sonnet-4-6` | `us.anthropic.claude-sonnet-4-6` |
 | `claude-haiku-4-5` | `us.anthropic.claude-haiku-4-5-20251001-v1:0` |

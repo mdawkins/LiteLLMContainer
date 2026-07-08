@@ -1,4 +1,4 @@
-# LLM-Lite Setup — Design Rationale & Component Reference
+# LiteLLM Setup — Design Rationale & Component Reference
 
 This document explains the architecture decisions behind the stack and provides extended context on each component. For day-to-day commands, see `RunContainer.md`. For the canonical quick-start, see `README.md`.
 
@@ -150,6 +150,15 @@ Uses the `bedrock/` prefix (Converse API) — the modern path that supports nati
 
 ```yaml
 model_list:
+
+  # Claude Sonnet 5 — near-Opus intelligence, primary coding model
+  - model_name: claude-sonnet-5
+    litellm_params:
+      model: bedrock/us.anthropic.claude-sonnet-5
+      aws_region_name: us-east-1
+      cache_control_injection_points:
+        - location: "user"
+        - location: "system"
 
   # Claude Opus 4.8 — most capable, primary reasoning model
   - model_name: claude-opus-4-8
