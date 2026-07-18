@@ -10,8 +10,9 @@ LiteLLM proxy stack for routing AI tool requests (Claude Code, VS Code extension
 │ (Claude CLI, │     │  (TLS Terminator │     │  (LiteLLM Proxy) │     │  (Converse API —     │
 │  VS Code,    │     │   port 443)      │     │   port 4000)     │     │   cross-region       │
 │  Desktop)    │     └──────────────────┘     └────────┬────────┘     │   inference profiles)│
-└──────────────┘        bridge: internal_net    host network (IMDS)   └──────────────────────┘
-                                                         │                    AWS region
+└──────────────┘        bridge: internal_net   bridge: internal_net   └──────────────────────┘
+                                                (IMDS via NAT hop)          AWS region
+                                                         │
                                                          ▼
                                                 ┌──────────────────┐
                                                 │   litellm-db      │
@@ -22,9 +23,11 @@ LiteLLM proxy stack for routing AI tool requests (Claude Code, VS Code extension
 
 | Service | Container Name | Image | Network | Purpose |
 |---------|---------------|-------|---------|---------|
-| `litellm-db` | `litellm-db` | `postgres:18` | `internal_net` bridge | Persistent storage for user keys, budgets, rate limits, token usage |
-| `litellm-proxy` | `litellm-proxy` | `ghcr.io/berriai/litellm:main-latest` | `host` | Translates OpenAI/Anthropic API calls to Amazon Bedrock (Converse API); enforces auth and throttling; reaches IMDS directly for IAM credentials |
-| `litellm-nginx` | `litellm-nginx` | `nginx:alpine` | `internal_net` bridge | TLS termination on port 443; proxies to `host.containers.internal:4000` |
+| `litellm-db` | `litellm-db` | `postgres:18@sha256:32ca0af8...` | `internal_net` bridge | Persistent storage for user keys, budgets, rate limits, token usage |
+| `litellm-proxy` | `litellm-proxy` | `ghcr.io/berriai/litellm:v1.92.0@sha256:9ef6f45b...` | `internal_net` bridge | Translates OpenAI/Anthropic API calls to Amazon Bedrock (Converse API); enforces auth and throttling; reaches IMDS (via NAT) for IAM credentials |
+| `litellm-nginx` | `litellm-nginx` | `nginx:alpine@sha256:7068961d...` | `internal_net` bridge | TLS termination on port 443; proxies to `litellm-proxy:4000` |
+
+All three images are pinned to immutable digests (see `litellm_service/Dockerfile`, `nginx_service/Dockerfile`, `compose-litellm.yaml`) rather than floating tags — never `:latest`/`:main-latest`. To bump a version: resolve the new tag's digest from the registry, review the upstream changelog, retest the stack, then update the pin deliberately. Never `podman pull` a floating tag into production.
 
 ## Directory Structure
 
@@ -37,20 +40,24 @@ LLMLiteContainer/
 ├── create-ai-user.sh         # Provision a user API key with budget and rate limits
 ├── check-ai-user.sh          # Check a user's budget spend and rate limits
 ├── revoke-ai-user.sh         # Revoke a user API key immediately
+├── harden-egress.sh          # Manual: restrict litellm-proxy's egress to DNS/IMDS/Bedrock only
 ├── RunContainer.md           # Quick-start commands and client config snippets
+├── SecurityRemediationPlan.md # Cyber Security response — threat vector → control mapping
+├── .github/workflows/
+│   └── image-scan.yml        # CI: Trivy vuln + config scan and SBOM per image, on push/PR
 ├── litellm_service/
-│   ├── Dockerfile            # Bakes config.yaml into the LiteLLM image
+│   ├── Dockerfile            # Bakes config.yaml into the LiteLLM image (pinned by digest)
 │   └── config.yaml           # Model list, routing, caching, and drop_params settings
 └── nginx_service/
-    ├── Dockerfile            # Bakes nginx.conf + self-signed TLS cert into nginx:alpine
-    └── nginx.conf            # TLS reverse proxy — proxies to host.containers.internal:4000
+    ├── Dockerfile            # Bakes nginx.conf + self-signed TLS cert into nginx:alpine (pinned by digest)
+    └── nginx.conf            # TLS reverse proxy — proxies to litellm-proxy:4000 over internal_net
 ```
 
 ## Configuration
 
 ### Environment Variables (compose-litellm.yaml)
 
-Variables are written to `.env` by `gen-env.sh`. AWS credentials are **not** stored in `.env` — `litellm-proxy` runs with `network_mode: host` and boto3 fetches them directly from the EC2 IMDS at request time, so they never expire.
+Variables are written to `.env` by `gen-env.sh`. AWS credentials are **not** stored in `.env` — `litellm-proxy` runs on the `internal_net` bridge and boto3 fetches them from the EC2 IMDS at request time (via the container's NAT hop), so they never expire.
 
 | Variable | Source | Description |
 |----------|--------|-------------|
@@ -60,7 +67,16 @@ Variables are written to `.env` by `gen-env.sh`. AWS credentials are **not** sto
 
 ### AWS Authentication
 
-`litellm-proxy` runs with `network_mode: host`, giving it direct access to the EC2 Instance Metadata Service (`169.254.169.254`). boto3 discovers the IAM role (`nhtsa-cdan.ec2.researcher.role`) automatically and rotates credentials in-process — no static keys, no restarts required when credentials refresh.
+`litellm-proxy` runs on the `internal_net` bridge and reaches the EC2 Instance Metadata Service (`169.254.169.254`) through the container's NAT hop rather than directly on the host interface. boto3 discovers the IAM role (`nhtsa-cdan.ec2.researcher.role`) automatically and rotates credentials in-process — no static keys, no restarts required when credentials refresh.
+
+This requires `HttpPutResponseHopLimit` on the EC2 instance's metadata options to be at least `2` — AWS's IMDSv2 default of `1` only reaches processes on the instance's primary network interface, not a container behind Podman's bridge NAT. Set it with:
+
+```shell
+aws ec2 modify-instance-metadata-options \
+  --instance-id <instance-id> \
+  --http-tokens required \
+  --http-put-response-hop-limit 2
+```
 
 ### litellm_service/config.yaml
 
@@ -81,7 +97,7 @@ Prompt caching is enabled via `cache_control_injection_points` on both `user` an
 
 - HTTP (80) redirects to HTTPS (443)
 - TLS 1.2/1.3 with strong ciphers; self-signed cert generated at image build time
-- Proxies to `host.containers.internal:4000` (host-networked litellm-proxy)
+- Proxies to `litellm-proxy:4000` over the `internal_net` bridge
 - Proxy buffering disabled for real-time token streaming
 - 600s read timeout for long-running code generation
 - 50MB max body for large context windows
@@ -166,7 +182,7 @@ All persistent data lives under `~/Build/Volumes/`:
 
 ## Network
 
-`litellm-proxy` runs with `network_mode: host` for direct IMDS access. `litellm-db` and `litellm-nginx` share the `internal_net` bridge; the db exposes `127.0.0.1:5432` so the host-networked proxy can reach it, and nginx reaches the proxy via `host.containers.internal`.
+All three services — `litellm-proxy`, `litellm-db`, and `litellm-nginx` — share the `internal_net` bridge and reach each other by container DNS name (`litellm-db:5432`, `litellm-proxy:4000`). None run with `network_mode: host`. `litellm-db` additionally exposes `127.0.0.1:5432` for host-local tooling; `litellm-proxy` reaches the EC2 IMDS through the bridge's NAT hop (see AWS Authentication above for the required `HttpPutResponseHopLimit` setting).
 
 `internal_net` is created once by `prerequisites.sh`:
 
@@ -208,11 +224,27 @@ These three settings together allow the rootless stack to bind ports 80/443, out
 
 ## Firewall
 
-The host runs firewalld in the `drop` zone (default-deny). Ports 80 and 443 must be open for clients to reach nginx. Port 4000 (litellm-proxy) and 5432 (postgres) do **not** need firewall rules — 4000 is only accessed internally via `host.containers.internal` and 5432 is bound to `127.0.0.1`.
+The host runs firewalld in the `drop` zone (default-deny). Ports 80 and 443 must be open for clients to reach nginx. Port 4000 (litellm-proxy) and 5432 (postgres) do **not** need firewall rules — both are only reached container-to-container over the `internal_net` bridge, and 5432 is additionally bound to `127.0.0.1` for host-local tooling.
 
 ```shell
 sudo firewall-cmd --permanent --add-port=80/tcp --add-port=443/tcp
 sudo firewall-cmd --reload
+```
+
+## Egress Filtering
+
+`harden-egress.sh` restricts outbound traffic from the `litellm-proxy` container's bridge subnet (`internal_net`) to only DNS, the EC2 IMDS, and Amazon Bedrock — closing off a compromised dependency's ability to call home to an external C2 server. It's scoped entirely by source address (the bridge subnet), so it never touches the existing firewalld zone or any other service's rules on this host.
+
+Not run automatically by `prerequisites.sh` — the Bedrock destination is an open question for the AWS architects (VPC interface endpoint vs. public IP-range allow-list; see `SecurityRemediationPlan.md`). Run it manually once that's decided:
+
+```shell
+# Option A — VPC interface endpoint (preferred)
+BEDROCK_ENDPOINT_CIDR=10.0.5.10/32 ./harden-egress.sh
+
+# Option B — public Bedrock IP ranges (fallback, review periodically).
+# Resolve current ranges from https://ip-ranges.amazonaws.com/ip-ranges.json
+# (filter service=="BEDROCK", region==your region) — do not guess these.
+BEDROCK_PUBLIC_CIDRS="<cidr1> <cidr2> ..." ./harden-egress.sh
 ```
 
 ## Log Rotation

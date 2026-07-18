@@ -1,6 +1,6 @@
 services:
   litellm-db:
-    image: postgres:18
+    image: docker.io/library/postgres:18@sha256:32ca0af8e77bfb8c6610c488e4691f83f972a3e9e64d3b02facf3ab111ad5500
     container_name: litellm-db
     user: "999:999"
     restart: unless-stopped
@@ -20,6 +20,10 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     networks:
       - internal_net
 
@@ -36,6 +40,10 @@ services:
     depends_on:
       litellm-db:
         condition: service_healthy
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     networks:
       - internal_net
 
@@ -54,6 +62,12 @@ services:
       - "443:443"
     depends_on:
       - litellm-proxy
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
     networks:
       - internal_net
 

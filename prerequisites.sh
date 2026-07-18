@@ -133,9 +133,9 @@ echo ""
 echo "[8/8] Verifying container image availability..."
 
 IMAGES=(
-    "postgres:18"
-    "ghcr.io/berriai/litellm:main-latest"
-    "nginx:alpine"
+    "docker.io/library/postgres:18@sha256:32ca0af8e77bfb8c6610c488e4691f83f972a3e9e64d3b02facf3ab111ad5500"
+    "ghcr.io/berriai/litellm:v1.92.0@sha256:9ef6f45bc0104940571765e610c52a1d761b5ec85efcd193795281086ee61277"
+    "docker.io/library/nginx:alpine@sha256:7068961d45b07b2af510ac002e9daa63a1d3eba2111202d6768798690800fffd"
 )
 
 for img in "${IMAGES[@]}"; do

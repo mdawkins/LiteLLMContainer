@@ -1,4 +1,4 @@
-FROM nginx:alpine
+FROM docker.io/library/nginx:alpine@sha256:7068961d45b07b2af510ac002e9daa63a1d3eba2111202d6768798690800fffd
 
 RUN apk add --no-cache openssl
 

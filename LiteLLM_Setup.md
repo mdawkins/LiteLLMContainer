@@ -21,27 +21,27 @@ LiteLLM acts as a central proxy that translates incoming OpenAI/Anthropic-format
 Client (Claude Code / VS Code / Claude Desktop)
         │  HTTPS :443
         ▼
-  litellm-nginx          (nginx:alpine, internal_net bridge)
+  litellm-nginx          (nginx:alpine, pinned by digest, internal_net bridge)
   TLS termination
         │  HTTP :4000
-        ▼  (via host.containers.internal)
-  litellm-proxy          (ghcr.io/berriai/litellm, host network)
+        ▼  (via litellm-proxy, container DNS on internal_net)
+  litellm-proxy          (ghcr.io/berriai/litellm, internal_net bridge)
   LiteLLM Proxy
-        │  boto3 → IMDS
+        │  boto3 → IMDS (via NAT hop)
         ├──────────────────▶  Amazon Bedrock
         │
-        │  TCP 127.0.0.1:5432
+        │  TCP litellm-db:5432 (internal_net)
         ▼
-  litellm-db             (postgres:18, internal_net bridge)
+  litellm-db             (postgres:18, pinned by digest, internal_net bridge)
   PostgreSQL
 ```
 
-`litellm-proxy` runs with `network_mode: host` for two reasons:
+All three services share the `internal_net` bridge and reach each other by container DNS name — none run with `network_mode: host`:
 
-1. It needs to reach the EC2 Instance Metadata Service (`169.254.169.254`) to fetch IAM credentials automatically — no static AWS keys required.
-2. It binds port `4000` on the host so nginx (on the internal bridge) can reach it via `host.containers.internal:4000`.
+1. `litellm-proxy` reaches the EC2 Instance Metadata Service (`169.254.169.254`) through the bridge's NAT hop to fetch IAM credentials automatically — no static AWS keys required. This requires `HttpPutResponseHopLimit >= 2` on the EC2 instance's metadata options, since the default of `1` only reaches the host's own primary interface, not a container behind NAT.
+2. `litellm-nginx` reaches `litellm-proxy` on port `4000` via container DNS (`litellm-proxy:4000`) on `internal_net`, not via the host.
 
-`litellm-db` exposes PostgreSQL on `127.0.0.1:5432` only — not accessible from outside the host. `litellm-nginx` is the only container with external-facing ports (80 and 443).
+`litellm-db` exposes PostgreSQL on `127.0.0.1:5432` for host-local tooling in addition to the `internal_net` bridge — it's not accessible from outside the host. `litellm-nginx` is the only container with external-facing ports (80 and 443).
 
 ---
 
@@ -82,7 +82,7 @@ podman-compose -f compose-litellm.yaml down
 
 ## TLS with Nginx
 
-Nginx terminates TLS on port 443 and proxies plaintext to `litellm-proxy` on port 4000 via `host.containers.internal`. The self-signed certificate is generated at image build time inside `nginx_service/Dockerfile`.
+Nginx terminates TLS on port 443 and proxies plaintext to `litellm-proxy` on port 4000 via container DNS on the `internal_net` bridge. The self-signed certificate is generated at image build time inside `nginx_service/Dockerfile`.
 
 `nginx_service/nginx.conf`:
 
@@ -118,7 +118,7 @@ http {
         ssl_ciphers HIGH:!aNULL:!MD5;
 
         location / {
-            proxy_pass http://host.containers.internal:4000;
+            proxy_pass http://litellm-proxy:4000;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

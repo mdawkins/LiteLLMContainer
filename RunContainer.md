@@ -152,7 +152,9 @@ sudo firewall-cmd --reload
 
 ## AWS Authentication
 
-`litellm-proxy` runs with `network_mode: host` and authenticates to Bedrock directly via the EC2 IAM instance role (`nhtsa-cdan.ec2.researcher.role`) through IMDS. Credentials rotate automatically in-process — no static keys, no credential refresh needed.
+`litellm-proxy` runs on the `internal_net` bridge and authenticates to Bedrock via the EC2 IAM instance role (`nhtsa-cdan.ec2.researcher.role`), reaching IMDS through the container's NAT hop. Credentials rotate automatically in-process — no static keys, no credential refresh needed.
+
+This requires `HttpPutResponseHopLimit >= 2` on the EC2 instance's metadata options (see `README.md` for the `aws ec2 modify-instance-metadata-options` command) — the default hop limit of `1` only reaches the host's primary interface, not a container behind bridge NAT.
 
 ## Aliases
 

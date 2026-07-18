@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Generate .env for compose — stable secrets only.
-# AWS credentials are NOT written here; litellm-proxy runs with network_mode: host
-# and boto3 fetches them directly from IMDS at runtime (no expiry problem).
+# AWS credentials are NOT written here; litellm-proxy runs on the internal_net
+# bridge network and boto3 fetches them from the EC2 IMDS at runtime (no expiry
+# problem). Requires HttpPutResponseHopLimit >= 2 on the EC2 instance metadata
+# options — the container-to-host NAT hop is otherwise invisible to a
+# hop-limit-1 IMDSv2 token request.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
