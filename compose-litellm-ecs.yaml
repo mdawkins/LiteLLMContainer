@@ -147,6 +147,10 @@ services:
   #   build:
   #     context: ./nginx_service
   #     dockerfile: Dockerfile
+  #   cap_add:
+  #     - NET_BIND_SERVICE
+  #     - SETUID
+  #     - SETGID
   #   environment:
   #     PROXY_IP: 127.0.0.1   # ALB connects to the task on the target port
   #   volumes:

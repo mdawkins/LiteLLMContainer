@@ -15,9 +15,9 @@ POSTGRES_PASSWORD=""
 LITELLM_MASTER_KEY=""
 EXISTING_DATABASE_URL=""
 if [[ -f "${ENV_FILE}" ]]; then
-    POSTGRES_PASSWORD=$(grep "^POSTGRES_PASSWORD=" "${ENV_FILE}" 2>/dev/null | cut -d= -f2-)
-    LITELLM_MASTER_KEY=$(grep "^LITELLM_MASTER_KEY=" "${ENV_FILE}" 2>/dev/null | cut -d= -f2-)
-    EXISTING_DATABASE_URL=$(grep "^DATABASE_URL=" "${ENV_FILE}" 2>/dev/null | cut -d= -f2-)
+    POSTGRES_PASSWORD=$(grep "^POSTGRES_PASSWORD=" "${ENV_FILE}" 2>/dev/null | cut -d= -f2- || true)
+    LITELLM_MASTER_KEY=$(grep "^LITELLM_MASTER_KEY=" "${ENV_FILE}" 2>/dev/null | cut -d= -f2- || true)
+    EXISTING_DATABASE_URL=$(grep "^DATABASE_URL=" "${ENV_FILE}" 2>/dev/null | cut -d= -f2- || true)
 fi
 [[ -z "${POSTGRES_PASSWORD}" ]] && POSTGRES_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
 [[ -z "${LITELLM_MASTER_KEY}" ]] && LITELLM_MASTER_KEY="sk-$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
