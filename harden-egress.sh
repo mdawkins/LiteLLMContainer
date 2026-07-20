@@ -21,9 +21,16 @@ POLICY_NAME="litellm-egress"
 # Option A (preferred): VPC interface endpoint ENI IP(s) for Bedrock. Doesn't
 # rot as AWS's public IP ranges change.
 BEDROCK_ENDPOINT_CIDR="${BEDROCK_ENDPOINT_CIDR:-}"     # e.g. 10.0.5.10/32
-# Option B (fallback): public Bedrock IP ranges for the target region, from
-# https://ip-ranges.amazonaws.com/ip-ranges.json (service: BEDROCK). Review
-# and re-run periodically since these can change.
+# Option B (fallback, WEAK — interim only): AWS does not publish a
+# BEDROCK-tagged entry in https://ip-ranges.amazonaws.com/ip-ranges.json.
+# Bedrock's regional endpoints resolve into the generic "AMAZON" catch-all
+# service, which for a single region is hundreds of CIDR blocks — effectively
+# all of AWS's public IP space there, not a Bedrock-specific allow-list. This
+# blocks non-AWS-hosted C2 but NOT C2 rented on AWS infrastructure, which is
+# most of what this control exists to stop. Use only as a documented,
+# temporary stopgap while the VPC endpoint (Option A) is arranged, and review
+# the CIDR set periodically since it still changes. See SecurityRemediationPlan.md,
+# open question #1.
 BEDROCK_PUBLIC_CIDRS="${BEDROCK_PUBLIC_CIDRS:-}"       # space-separated CIDRs
 
 # --- Amazon RDS (optional) — set only if litellm-proxy has been switched to
@@ -71,6 +78,13 @@ if [[ -n "${BEDROCK_ENDPOINT_CIDR}" ]]; then
     sudo firewall-cmd --permanent --policy="${POLICY_NAME}" \
         --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" destination address=\"${BEDROCK_ENDPOINT_CIDR}\" accept"
 else
+    NUM_CIDRS=$(wc -w <<< "${BEDROCK_PUBLIC_CIDRS}")
+    echo "WARNING: using BEDROCK_PUBLIC_CIDRS fallback (${NUM_CIDRS} CIDRs) — this is the" >&2
+    echo "  generic AWS 'AMAZON' regional range, not a Bedrock-specific allow-list (AWS" >&2
+    echo "  publishes no BEDROCK-tagged entry in ip-ranges.json). It blocks non-AWS-hosted" >&2
+    echo "  C2 but NOT C2 rented on AWS infrastructure. Treat this as a temporary stopgap" >&2
+    echo "  only, pending a Bedrock VPC endpoint. See SecurityRemediationPlan.md, open" >&2
+    echo "  question #1." >&2
     for cidr in ${BEDROCK_PUBLIC_CIDRS}; do
         sudo firewall-cmd --permanent --policy="${POLICY_NAME}" \
             --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" destination address=\"${cidr}\" accept"
