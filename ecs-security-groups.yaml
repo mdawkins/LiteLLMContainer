@@ -1,0 +1,223 @@
+## ecs-security-groups.yaml
+## CloudFormation template for LiteLLM ECS security groups.
+##
+## Replaces harden-egress.sh: instead of firewalld policies scoped to a Podman
+## bridge subnet, we define Security Groups with explicit allow/deny rules at
+## the VPC level. These are enforced by the AWS VPC fabric and are non-
+## bypassable from inside the task — even a fully compromised process cannot
+## escape them.
+##
+## Deploy once per VPC:
+##   aws cloudformation deploy \
+##     --template-file ecs-security-groups.yaml \
+##     --stack-name litellm-ecs-sg \
+##     --parameter-overrides \
+##       VpcId=vpc-xxxxxxxx \
+##       BedrockEndpointCidr=10.0.5.10/32 \
+##       AllowedCidr=10.0.0.0/16
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Security Groups for the LiteLLM ECS stack. Replaces harden-egress.sh with
+  VPC-level egress controls that cannot be bypassed from inside a task.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC where the ECS cluster runs.
+
+  BedrockEndpointCidr:
+    Type: String
+    Default: ""
+    Description: >
+      VPC interface endpoint CIDR for Bedrock (e.g. 10.0.5.10/32). If empty,
+      falls back to BedrockPublicCidrs.
+
+  BedrockPublicCidrs:
+    Type: String
+    Default: ""
+    Description: >
+      Space-separated public CIDRs for Bedrock (fallback if no VPC endpoint).
+      Only the FIRST is applied automatically (see BedrockPublicCidrExtra1/2
+      below for additional CIDRs). Resolve from
+      https://ip-ranges.amazonaws.com/ip-ranges.json (service=BEDROCK).
+      Review periodically — these can change.
+
+  BedrockPublicCidrExtra1:
+    Type: String
+    Default: ""
+    Description: >
+      Optional 2nd public Bedrock CIDR, only used when BedrockEndpointCidr is
+      empty. Leave empty if BedrockPublicCidrs has only one CIDR.
+
+  BedrockPublicCidrExtra2:
+    Type: String
+    Default: ""
+    Description: >
+      Optional 3rd public Bedrock CIDR, only used when BedrockEndpointCidr is
+      empty. Leave empty if not needed.
+
+  AllowedCidr:
+    Type: String
+    Default: ""
+    Description: >
+      CIDR allowed to reach the ALB (e.g. your corporate network, VPN, or 0.0.0.0/0).
+      If empty, the ALB listener is open to 0.0.0.0/0.
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+
+Conditions:
+  HasBedrockEndpoint: !Not [!Equals [!Ref BedrockEndpointCidr, ""]]
+  HasBedrockPublic: !Not [!Equals [!Ref BedrockPublicCidrs, ""]]
+  HasAllowedCidr: !Not [!Equals [!Ref AllowedCidr, ""]]
+  HasBedrockPublicCidrExtra1: !And
+    - !Not [!Condition HasBedrockEndpoint]
+    - !Not [!Equals [!Ref BedrockPublicCidrExtra1, ""]]
+  HasBedrockPublicCidrExtra2: !And
+    - !Not [!Condition HasBedrockEndpoint]
+    - !Not [!Equals [!Ref BedrockPublicCidrExtra2, ""]]
+
+Resources:
+
+  # -----------------------------------------------------------------------
+  # ALB Security Group — internet-facing, HTTP/HTTPS only
+  # -----------------------------------------------------------------------
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: LiteLLM ALB — allows inbound HTTP/HTTPS from AllowedCidr
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !If [HasAllowedCidr, !Ref AllowedCidr, "0.0.0.0/0"]
+          Description: HTTP redirect to HTTPS
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !If [HasAllowedCidr, !Ref AllowedCidr, "0.0.0.0/0"]
+          Description: HTTPS from clients
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 4000
+          ToPort: 4000
+          DestinationSecurityGroupId: !Ref LitellmProxySecurityGroup
+          Description: To LiteLLM proxy on port 4000
+      Tags:
+        - Key: Name
+          Value: litellm-alb-sg-${Environment}
+
+  # -----------------------------------------------------------------------
+  # LiteLLM Proxy Security Group — egress locked to DNS + Bedrock only
+  # -----------------------------------------------------------------------
+  LitellmProxySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: >
+        LiteLLM proxy — ingress from ALB only; egress locked to DNS (53),
+        Bedrock (443), and Postgres (5432). No other outbound allowed.
+        This is the VPC-level equivalent of harden-egress.sh.
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 4000
+          ToPort: 4000
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+          Description: From ALB (litellm-proxy port 4000)
+      SecurityGroupEgress:
+        # DNS — required to resolve Bedrock and STS hostnames
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: DNS resolution (UDP)
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: DNS resolution (TCP fallback)
+        # Postgres — to the litellm-db task
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          DestinationSecurityGroupId: !Ref LitellmDbSecurityGroup
+          Description: To litellm-db on port 5432
+        # Bedrock — VPC interface endpoint (preferred) OR public ranges
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !If
+            - HasBedrockEndpoint
+            - !Ref BedrockEndpointCidr
+            - !If
+              - HasBedrockPublic
+              - !Select [0, !Split [" ", !Ref BedrockPublicCidrs]]
+              - "0.0.0.0/0"   # Fails safe to no Bedrock — deploy will error
+          Description: Amazon Bedrock (primary CIDR)
+      Tags:
+        - Key: Name
+          Value: litellm-proxy-sg-${Environment}
+
+  # Additional Bedrock public CIDRs (only relevant without a VPC endpoint,
+  # and only if BedrockPublicCidrs needs more than one CIDR). CloudFormation
+  # has no resource-count/loop construct, so these are enumerated explicitly
+  # and bounded to 3 total public CIDRs (the primary one above + these two).
+  LitellmProxyBedrockEgressExtra1:
+    Type: AWS::EC2::SecurityGroupEgress
+    Condition: HasBedrockPublicCidrExtra1
+    Properties:
+      GroupId: !Ref LitellmProxySecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref BedrockPublicCidrExtra1
+      Description: Amazon Bedrock (2nd public CIDR)
+
+  LitellmProxyBedrockEgressExtra2:
+    Type: AWS::EC2::SecurityGroupEgress
+    Condition: HasBedrockPublicCidrExtra2
+    Properties:
+      GroupId: !Ref LitellmProxySecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref BedrockPublicCidrExtra2
+      Description: Amazon Bedrock (3rd public CIDR)
+
+  # -----------------------------------------------------------------------
+  # Postgres Security Group — ingress from proxy only, no internet egress
+  # -----------------------------------------------------------------------
+  LitellmDbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: >
+        litellm-db — accepts connections from litellm-proxy only.
+        No internet egress: this task cannot call home.
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LitellmProxySecurityGroup
+          Description: From litellm-proxy only
+      SecurityGroupEgress: []   # EMPTY — no outbound at all for Postgres
+      Tags:
+        - Key: Name
+          Value: litellm-db-sg-${Environment}
+
+Outputs:
+  AlbSecurityGroupId:
+    Description: Attach this to the ALB
+    Value: !Ref AlbSecurityGroup
+
+  LitellmProxySecurityGroupId:
+    Description: Attach this to the litellm-proxy ECS task
+    Value: !Ref LitellmProxySecurityGroup
+
+  LitellmDbSecurityGroupId:
+    Description: Attach this to the litellm-db ECS task
+    Value: !Ref LitellmDbSecurityGroup

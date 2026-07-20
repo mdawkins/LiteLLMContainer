@@ -1,4 +1,15 @@
 services:
+  # OPTIONAL when using Amazon RDS instead of a local Postgres container
+  # (see rds-postgres.yaml and the "Optional: Amazon RDS" section in
+  # README.md):
+  #   1. Comment out this entire litellm-db service block.
+  #   2. Remove the `depends_on: litellm-db: condition: service_healthy`
+  #      block from litellm-proxy below.
+  #   3. Set DATABASE_URL in .env to the RDS endpoint (see rds-postgres.yaml
+  #      Outputs) with ?sslmode=require, then re-run gen-env.sh (preserves it
+  #      across regeneration, same as POSTGRES_PASSWORD/LITELLM_MASTER_KEY).
+  # RDS lives on its own VPC ENI, NOT on internal_net — isolation comes from
+  # the RDS security group + PubliclyAccessible:false, not bridge membership.
   litellm-db:
     image: docker.io/library/postgres:18@sha256:32ca0af8e77bfb8c6610c488e4691f83f972a3e9e64d3b02facf3ab111ad5500
     container_name: litellm-db
@@ -34,7 +45,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://proxy_admin:${POSTGRES_PASSWORD}@litellm-db:5432/litellm
+      DATABASE_URL: ${DATABASE_URL}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       AWS_REGION: ${AWS_REGION:-us-east-1}
     depends_on:

@@ -26,6 +26,13 @@ BEDROCK_ENDPOINT_CIDR="${BEDROCK_ENDPOINT_CIDR:-}"     # e.g. 10.0.5.10/32
 # and re-run periodically since these can change.
 BEDROCK_PUBLIC_CIDRS="${BEDROCK_PUBLIC_CIDRS:-}"       # space-separated CIDRs
 
+# --- Amazon RDS (optional) — set only if litellm-proxy has been switched to
+# an RDS-backed DATABASE_URL (see rds-postgres.yaml). Traffic to the local
+# litellm-db container never leaves the host and doesn't need this; traffic
+# to RDS routes off-host and would otherwise hit the catch-all reject below.
+RDS_ENDPOINT_CIDR="${RDS_ENDPOINT_CIDR:-}"             # e.g. 10.0.6.20/32
+RDS_PORT="${RDS_PORT:-5432}"
+
 if [[ -z "${BEDROCK_ENDPOINT_CIDR}" && -z "${BEDROCK_PUBLIC_CIDRS}" ]]; then
     echo "ERROR: set BEDROCK_ENDPOINT_CIDR or BEDROCK_PUBLIC_CIDRS before running." >&2
     echo "  This is the open question for the AWS architects (SecurityRemediationPlan.md)." >&2
@@ -68,6 +75,11 @@ else
         sudo firewall-cmd --permanent --policy="${POLICY_NAME}" \
             --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" destination address=\"${cidr}\" accept"
     done
+fi
+
+if [[ -n "${RDS_ENDPOINT_CIDR}" ]]; then
+    sudo firewall-cmd --permanent --policy="${POLICY_NAME}" \
+        --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" destination address=\"${RDS_ENDPOINT_CIDR}\" port port=\"${RDS_PORT}\" protocol=\"tcp\" accept"
 fi
 
 # Catch-all reject runs last (positive priority), scoped to this subnet only —

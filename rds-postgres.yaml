@@ -1,0 +1,217 @@
+## rds-postgres.yaml
+## CloudFormation template for an Amazon RDS PostgreSQL instance backing the
+## LiteLLM proxy stack — usable from EITHER the AWS Linux VM target or the
+## ECS target, since RDS is a VPC-level resource, not compute-specific.
+##
+## RDS is NEVER a member of the Podman `internal_net` bridge (or any ECS task
+## network). It gets its own ENI in your VPC subnets. Isolation comes from:
+##   - RdsSecurityGroup: ingress on 5432 restricted to AllowedSecurityGroupId
+##     (preferred — reference the client's own SG) or AllowedCidr (fallback).
+##   - PubliclyAccessible: false — no route from the internet, ever.
+##   - egress: [] on the security group — RDS itself never calls out.
+## This is enforced by the VPC fabric, the same non-bypassable guarantee
+## already described for ecs-security-groups.yaml.
+##
+## This is OPTIONAL. The default persistence model remains the `litellm-db`
+## Podman container (see compose-litellm.yaml). Deploy this only when you've
+## decided to move persistence to RDS — see the "Optional: Amazon RDS"
+## section in README.md and SecurityRemediationPlan.md's Persistence entry.
+##
+## Deploy once per VPC:
+##   aws cloudformation deploy \
+##     --template-file rds-postgres.yaml \
+##     --stack-name litellm-rds \
+##     --parameter-overrides \
+##       VpcId=vpc-xxxxxxxx \
+##       SubnetIds=subnet-aaa,subnet-bbb \
+##       AllowedSecurityGroupId=sg-xxxxxxxx \
+##       MasterUserPassword='{{resolve:secretsmanager:litellm/rds-password:SecretString:password}}' \
+##     --capabilities CAPABILITY_IAM
+##
+## Confirm the actual supported PostgreSQL minor version before deploying:
+##   aws rds describe-db-engine-versions --engine postgres --query 'DBEngineVersions[].EngineVersion'
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Amazon RDS PostgreSQL instance for the LiteLLM proxy stack. Optional
+  replacement for the litellm-db Podman container; usable from the VM or ECS.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC where the RDS instance and its clients (VM or ECS tasks) run.
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: >
+      At least 2 subnets across distinct AZs. Required by DBSubnetGroup even
+      when MultiAZ is false.
+
+  AllowedSecurityGroupId:
+    Type: String
+    Default: ""
+    Description: >
+      Security group of the client allowed to reach Postgres (the EC2
+      instance's own SG on the VM path, or LitellmProxySecurityGroup on the
+      ECS path). Preferred over AllowedCidr.
+
+  AllowedCidr:
+    Type: String
+    Default: ""
+    Description: >
+      Fallback CIDR allowed to reach Postgres if no client security group is
+      available. Used only if AllowedSecurityGroupId is empty.
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+    Description: Instance class. Size up for production workloads.
+
+  EngineVersion:
+    Type: String
+    Default: "18.1"
+    Description: >
+      PostgreSQL engine version. Confirm the current supported value with
+      `aws rds describe-db-engine-versions --engine postgres` before deploy —
+      do not assume this default is still valid at deploy time.
+
+  MasterUsername:
+    Type: String
+    Default: proxy_admin
+    Description: Matches the existing litellm-db container's Postgres user.
+
+  MasterUserPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: >
+      Pass via a Secrets Manager dynamic reference
+      ({{resolve:secretsmanager:litellm/rds-password:SecretString:password}})
+      so it never appears in plaintext in the template, CLI history, or
+      CloudFormation console.
+
+  BackupRetentionPeriod:
+    Type: Number
+    Default: 7
+    Description: Automated backup retention in days.
+
+  MultiAZ:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable for production high availability. Doubles cost.
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+
+Conditions:
+  HasAllowedSg: !Not [!Equals [!Ref AllowedSecurityGroupId, ""]]
+  HasAllowedCidr: !Not [!Equals [!Ref AllowedCidr, ""]]
+  IsProd: !Equals [!Ref Environment, prod]
+
+Resources:
+
+  # -----------------------------------------------------------------------
+  # Subnet group — required even for a single-AZ instance
+  # -----------------------------------------------------------------------
+  RdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "litellm-rds-subnets-${Environment}"
+      SubnetIds: !Ref SubnetIds
+      Tags:
+        - Key: Name
+          Value: !Sub "litellm-rds-subnet-group-${Environment}"
+
+  # -----------------------------------------------------------------------
+  # Security group — ingress from the client SG/CIDR only, zero egress
+  # -----------------------------------------------------------------------
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: >
+        litellm RDS Postgres — ingress on 5432 from the litellm client
+        (VM instance SG or ECS proxy SG) only. No egress: RDS never calls out.
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - !If
+          - HasAllowedSg
+          - IpProtocol: tcp
+            FromPort: 5432
+            ToPort: 5432
+            SourceSecurityGroupId: !Ref AllowedSecurityGroupId
+            Description: From the litellm client security group
+          - !If
+            - HasAllowedCidr
+            - IpProtocol: tcp
+              FromPort: 5432
+              ToPort: 5432
+              CidrIp: !Ref AllowedCidr
+              Description: From the litellm client CIDR (fallback)
+            - !Ref "AWS::NoValue"
+      SecurityGroupEgress: []
+      Tags:
+        - Key: Name
+          Value: !Sub "litellm-rds-sg-${Environment}"
+
+  # -----------------------------------------------------------------------
+  # Parameter group — force SSL on every client connection
+  # -----------------------------------------------------------------------
+  RdsParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: !Sub "litellm RDS Postgres params (${Environment}) — force SSL"
+      Family: postgres18
+      Parameters:
+        rds.force_ssl: "1"
+
+  # -----------------------------------------------------------------------
+  # DB instance — encrypted, private, IAM auth available (not wired up)
+  # -----------------------------------------------------------------------
+  RdsInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub "litellm-postgres-${Environment}"
+      Engine: postgres
+      EngineVersion: !Ref EngineVersion
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: "20"
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Ref MasterUserPassword
+      DBName: litellm
+      DBSubnetGroupName: !Ref RdsSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RdsSecurityGroup
+      DBParameterGroupName: !Ref RdsParameterGroup
+      PubliclyAccessible: false
+      MultiAZ: !Ref MultiAZ
+      BackupRetentionPeriod: !Ref BackupRetentionPeriod
+      DeletionProtection: !If [IsProd, true, false]
+      # Exposed as an option, not wired up: IAM auth tokens expire after 15
+      # minutes and need RDS Proxy or a refresh sidecar to be usable by
+      # litellm-proxy's long-lived DATABASE_URL. Treat as a future open
+      # question (see SecurityRemediationPlan.md) rather than a working
+      # feature — do not point DATABASE_URL at IAM auth without that piece.
+      EnableIAMDatabaseAuthentication: true
+      Tags:
+        - Key: Name
+          Value: !Sub "litellm-postgres-${Environment}"
+
+Outputs:
+  DBEndpointAddress:
+    Description: RDS endpoint hostname — use in DATABASE_URL
+    Value: !GetAtt RdsInstance.Endpoint.Address
+
+  DBEndpointPort:
+    Description: RDS endpoint port
+    Value: !GetAtt RdsInstance.Endpoint.Port
+
+  RdsSecurityGroupId:
+    Description: Security group attached to the RDS instance
+    Value: !Ref RdsSecurityGroup

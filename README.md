@@ -40,11 +40,15 @@ LLMLiteContainer/
 ├── create-ai-user.sh         # Provision a user API key with budget and rate limits
 ├── check-ai-user.sh          # Check a user's budget spend and rate limits
 ├── revoke-ai-user.sh         # Revoke a user API key immediately
-├── harden-egress.sh          # Manual: restrict litellm-proxy's egress to DNS/IMDS/Bedrock only
+├── harden-egress.sh          # Manual: restrict litellm-proxy's egress to DNS/IMDS/Bedrock(/RDS) only
+├── scan-image.sh             # Scanner-agnostic image scan (Trivy/Grype/custom) + SBOM — run manually
+├── rds-postgres.yaml         # Optional: CloudFormation for Amazon RDS Postgres (VM or ECS)
 ├── RunContainer.md           # Quick-start commands and client config snippets
+├── REDEPLOY.md               # git pull + redeploy runbook for the AWS Linux VM
 ├── SecurityRemediationPlan.md # Cyber Security response — threat vector → control mapping
 ├── .github/workflows/
-│   └── image-scan.yml        # CI: Trivy vuln + config scan and SBOM per image, on push/PR
+│   └── image-scan.yml        # Reference example only (NOT enabled) — wraps scan-image.sh;
+│                              # scanner is swappable via the SCANNER env var, not fixed to Trivy
 ├── litellm_service/
 │   ├── Dockerfile            # Bakes config.yaml into the LiteLLM image (pinned by digest)
 │   └── config.yaml           # Model list, routing, caching, and drop_params settings
@@ -63,7 +67,19 @@ Variables are written to `.env` by `gen-env.sh`. AWS credentials are **not** sto
 |----------|--------|-------------|
 | `POSTGRES_PASSWORD` | gen-env.sh (generated once, preserved) | Random 32-byte password for the PostgreSQL `proxy_admin` user |
 | `LITELLM_MASTER_KEY` | gen-env.sh (generated once, preserved) | `sk-` prefixed master key for the LiteLLM proxy admin API |
+| `DATABASE_URL` | gen-env.sh (computed once, preserved) | Postgres connection string. Defaults to the local `litellm-db` container; set manually to an RDS endpoint to switch (see "Optional: Amazon RDS" below) — once set, it's preserved across regeneration like the secrets above |
 | `VOLUMES` | env or default | Base path for volume mounts — defaults to `$HOME/Build/Volumes` |
+
+### Optional: Amazon RDS instead of the local Postgres container
+
+`litellm-db` (a Podman container) is the default — no AWS dependency, fast local iteration. For production-grade persistence (automated backups, encryption at rest) on either the VM or a future ECS deployment, `rds-postgres.yaml` provisions an Amazon RDS PostgreSQL instance instead. **RDS is never a member of `internal_net`** — it gets its own ENI in your VPC subnets; isolation comes from its security group (ingress locked to the client's own SG) plus `PubliclyAccessible: false`, not container-network membership.
+
+To switch:
+1. Deploy `rds-postgres.yaml` (see the header comment in that file for the `aws cloudformation deploy` command) and note the `DBEndpointAddress` output.
+2. Follow the 3-step comment block above the `litellm-db` service in `compose-litellm.yaml` (comment it out, drop the `depends_on`, set `DATABASE_URL` in `.env`).
+3. If `harden-egress.sh` is in use, set `RDS_ENDPOINT_CIDR` before re-running it, so the proxy's egress lockdown allows the new destination.
+
+IAM database authentication is available on the RDS instance but not wired into `litellm-proxy` — its 15-minute token expiry needs RDS Proxy or a refresh sidecar, tracked as an open item in `SecurityRemediationPlan.md`.
 
 ### AWS Authentication
 
@@ -114,6 +130,8 @@ podman-compose -f compose-litellm.yaml up -d
 ```
 
 The stack auto-starts on boot via `litellm-stack.service` (installed by `prerequisites.sh`).
+
+For pulling updates and redeploying on an already-running VM, see `REDEPLOY.md`.
 
 ## User Key Management
 
