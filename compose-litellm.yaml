@@ -11,7 +11,7 @@ services:
   # RDS lives on its own VPC ENI, NOT on internal_net — isolation comes from
   # the RDS security group + PubliclyAccessible:false, not bridge membership.
   litellm-db:
-    image: docker.io/library/postgres:18@sha256:32ca0af8e77bfb8c6610c488e4691f83f972a3e9e64d3b02facf3ab111ad5500
+    image: docker.io/library/postgres:18@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
     container_name: litellm-db
     user: "999:999"
     restart: unless-stopped
@@ -48,6 +48,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       AWS_REGION: ${AWS_REGION:-us-east-1}
+      DOT_USAI_API_KEY: ${DOT_USAI_API_KEY}
     depends_on:
       litellm-db:
         condition: service_healthy
@@ -86,5 +87,6 @@ services:
 
 networks:
   internal_net:
-    external: true
+    # external: true
+    driver: bridge
     name: internal_net

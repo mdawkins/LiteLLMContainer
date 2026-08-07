@@ -1,6 +1,6 @@
 model_list:
 
-  # Claude Sonnet 5 — near-Opus intelligence, primary coding model
+  # Bedrock Models
   - model_name: claude-sonnet-5
     litellm_params:
       model: bedrock/us.anthropic.claude-sonnet-5
@@ -9,7 +9,6 @@ model_list:
         - location: "user"
         - location: "system"
 
-  # Claude Opus 4.8 — most capable, primary reasoning model
   - model_name: claude-opus-4-8
     litellm_params:
       model: bedrock/us.anthropic.claude-opus-4-8
@@ -18,7 +17,6 @@ model_list:
         - location: "user"
         - location: "system"
 
-  # Claude Sonnet 4.6 — balanced speed/capability, primary coding model
   - model_name: claude-sonnet-4-6
     litellm_params:
       model: bedrock/us.anthropic.claude-sonnet-4-6
@@ -27,48 +25,102 @@ model_list:
         - location: "user"
         - location: "system"
 
-  # Claude Haiku 4.5 — fast/budget model
-  - model_name: claude-haiku-4-5
+  # USAI Models
+  - model_name: claude_4_8_opus
     litellm_params:
-      model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
-      aws_region_name: us-east-1
-      cache_control_injection_points:
-        - location: "user"
-        - location: "system"
+      model: openai/claude_4_8_opus
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
 
-  # Legacy aliases — backwards-compat with existing client configs
-  - model_name: claude-3-5-sonnet
+  - model_name: claude_4_7_opus
     litellm_params:
-      model: bedrock/us.anthropic.claude-sonnet-4-6
-      aws_region_name: us-east-1
-      cache_control_injection_points:
-        - location: "user"
-        - location: "system"
+      model: openai/claude_4_7_opus
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
 
-  - model_name: claude-3-5-sonnet-v2
+  - model_name: claude_4_5_opus
     litellm_params:
-      model: bedrock/us.anthropic.claude-sonnet-4-6
-      aws_region_name: us-east-1
-      cache_control_injection_points:
-        - location: "user"
-        - location: "system"
+      model: openai/claude_4_5_opus
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
 
-  - model_name: claude-3-5-haiku
+  - model_name: claude_4_6_sonnet
     litellm_params:
-      model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
-      aws_region_name: us-east-1
-      cache_control_injection_points:
-        - location: "user"
-        - location: "system"
+      model: openai/claude_4_6_sonnet
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
 
-  # IDE extension fallback alias
-  - model_name: anthropic.claude-3-5-sonnet
+  - model_name: claude_4_5_sonnet
     litellm_params:
-      model: bedrock/us.anthropic.claude-sonnet-4-6
-      aws_region_name: us-east-1
-      cache_control_injection_points:
-        - location: "user"
-        - location: "system"
+      model: openai/claude_4_5_sonnet
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
+
+  - model_name: claude_4_5_haiku
+    litellm_params:
+      model: openai/claude_4_5_haiku
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
+
+  - model_name: llama_4_maverick
+    litellm_params:
+      model: openai/llama_4_maverick
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
+
+  - model_name: cohere_english_v3
+    litellm_params:
+      model: openai/cohere_english_v3
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
+
+  - model_name: gemini-2.5-flash
+    litellm_params:
+      model: openai/gemini-2.5-flash
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
+
+  - model_name: gemini-2.5-flash-lite
+    litellm_params:
+      model: openai/gemini-2.5-flash-lite
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
+
+  - model_name: gemini-2.5-pro
+    litellm_params:
+      model: openai/gemini-2.5-pro
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
+
+  - model_name: text-embedding-005
+    litellm_params:
+      model: openai/text-embedding-005
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
+
+  - model_name: grok-4-latest-guardrails-defaultv2
+    litellm_params:
+      model: openai/grok-4-latest-guardrails-defaultv2
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
+
+  - model_name: gpt-5.5-latest-guardrails-defaultv2
+    litellm_params:
+      model: openai/gpt-5.5-latest-guardrails-defaultv2
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
+
+  - model_name: gpt-5.4-latest-guardrails-defaultv2
+    litellm_params:
+      model: openai/gpt-5.4-latest-guardrails-defaultv2
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
+
+  - model_name: gpt-5.2-latest-guardrails-defaultv2
+    litellm_params:
+      model: openai/gpt-5.2-latest-guardrails-defaultv2
+      api_base: https://api.dot.usai.gov/api/v1
+      api_key: os.environ/DOT_USAI_API_KEY
 
 router_settings:
   routing_strategy: simple-shuffle
