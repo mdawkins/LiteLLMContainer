@@ -230,4 +230,11 @@ litellm_settings:
     - "tools[*].strict"
 
 general_settings:
-  set_verbose: true
+  set_verbose: false
+
+#guardrails:
+#  - guardrail_name: headroom-compression
+#    litellm_params:
+#      guardrail: headroom
+#      mode: pre_call
+#      api_base: http://headroom:8787

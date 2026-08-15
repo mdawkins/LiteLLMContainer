@@ -38,6 +38,23 @@ services:
     networks:
       - internal_net
 
+#  headroom:
+#    container_name: headroom
+#    user: "1000:1000" # Run container process as a non-root user
+#    build:
+#      context: ./litellm_service
+#      dockerfile: Dockerfile
+#    restart: unless-stopped
+#    environment:
+#      HEADROOM_TELEMETRY: "off"
+#      HEADROOM_COMPRESS_USER_MESSAGES: "1"
+#    cap_drop:
+#      - ALL
+#    security_opt:
+#      - no-new-privileges:true
+#    networks:
+#      - internal_net
+
   litellm-proxy:
     container_name: litellm-proxy
     build:
@@ -50,9 +67,12 @@ services:
       AWS_REGION: ${AWS_REGION:-us-east-1}
       DOT_USAI_API_KEY: ${DOT_USAI_API_KEY}
       LITELLM_USE_CHAT_COMPLETIONS_URL_FOR_ANTHROPIC_MESSAGES: "true"
+#      HEADROOM_API_BASE: "http://headroom:8787"
     depends_on:
       litellm-db:
         condition: service_healthy
+#      headroom:
+#        condition: service_started
     cap_drop:
       - ALL
     security_opt:
