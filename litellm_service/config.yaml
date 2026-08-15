@@ -1,56 +1,70 @@
 model_list:
-  # USAI Models
+  # ==========================================
+  # ANTHROPIC MODELS
+  # ==========================================
   - model_name: claude_4_6_sonnet
     litellm_params:
-      model: custom_openai/claude_4_6_sonnet
+      model: openai/claude_4_6_sonnet
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.0000033   # $3.30 / 1M
       output_cost_per_token: 0.0000165  # $16.50 / 1M
 
   - model_name: claude_4_5_sonnet
     litellm_params:
-      model: custom_openai/claude_4_5_sonnet
+      model: openai/claude_4_5_sonnet
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.0000030   # $3.00 / 1M
       output_cost_per_token: 0.0000150  # $15.00 / 1M
 
   - model_name: claude_4_8_opus
     litellm_params:
-      model: custom_openai/claude_4_8_opus
+      model: openai/claude_4_8_opus
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.0000055   # $5.50 / 1M
       output_cost_per_token: 0.0000275  # $27.50 / 1M
 
   - model_name: claude_4_7_opus
     litellm_params:
-      model: custom_openai/claude_4_7_opus
+      model: openai/claude_4_7_opus
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.0000055   # $5.50 / 1M
       output_cost_per_token: 0.0000275  # $27.50 / 1M
 
   - model_name: claude_4_5_opus
     litellm_params:
-      model: custom_openai/claude_4_5_opus
+      model: openai/claude_4_5_opus
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.0000050   # $5.00 / 1M
       output_cost_per_token: 0.0000250  # $25.00 / 1M
 
   - model_name: claude_4_5_haiku
     litellm_params:
-      model: custom_openai/claude_4_5_haiku
+      model: openai/claude_4_5_haiku
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.0000011   # $1.10 / 1M
       output_cost_per_token: 0.0000055  # $5.50 / 1M
 
@@ -59,28 +73,34 @@ model_list:
   # ==========================================
   - model_name: gpt-5.5-latest-guardrails-defaultv2
     litellm_params:
-      model: custom_openai/gpt-5.5-latest-guardrails-defaultv2
+      model: openai/gpt-5.5-latest-guardrails-defaultv2
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.0000050   # $5.00 / 1M
       output_cost_per_token: 0.0000300  # $30.00 / 1M
 
   - model_name: gpt-5.4-latest-guardrails-defaultv2
     litellm_params:
-      model: custom_openai/gpt-5.4-latest-guardrails-defaultv2
+      model: openai/gpt-5.4-latest-guardrails-defaultv2
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.0000025   # $2.50 / 1M
       output_cost_per_token: 0.0000150  # $15.00 / 1M
 
   - model_name: gpt-5.2-latest-guardrails-defaultv2
     litellm_params:
-      model: custom_openai/gpt-5.2-latest-guardrails-defaultv2
+      model: openai/gpt-5.2-latest-guardrails-defaultv2
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.00000175  # $1.75 / 1M
       output_cost_per_token: 0.0000140  # $14.00 / 1M
 
@@ -89,28 +109,34 @@ model_list:
   # ==========================================
   - model_name: gemini-2.5-pro
     litellm_params:
-      model: custom_openai/gemini-2.5-pro
+      model: openai/gemini-2.5-pro
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.00000125  # $1.25 / 1M
       output_cost_per_token: 0.0000100  # $10.00 / 1M
 
   - model_name: gemini-2.5-flash
     litellm_params:
-      model: custom_openai/gemini-2.5-flash
+      model: openai/gemini-2.5-flash
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.00000030  # $0.30 / 1M
       output_cost_per_token: 0.00000250 # $2.50 / 1M
 
   - model_name: gemini-2.5-flash-lite
     litellm_params:
-      model: custom_openai/gemini-2.5-flash-lite
+      model: openai/gemini-2.5-flash-lite
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.00000010  # $0.10 / 1M
       output_cost_per_token: 0.00000010 # $0.10 / 1M
 
@@ -119,31 +145,35 @@ model_list:
   # ==========================================
   - model_name: grok-4-latest-guardrails-defaultv2
     litellm_params:
-      model: custom_openai/grok-4-latest-guardrails-defaultv2
+      model: openai/grok-4-latest-guardrails-defaultv2
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.0000055   # $5.50 / 1M
       output_cost_per_token: 0.0000275  # $27.50 / 1M
 
   - model_name: llama_4_maverick
     litellm_params:
-      model: custom_openai/llama_4_maverick
+      model: openai/llama_4_maverick
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.00000024  # $0.24 / 1M
       output_cost_per_token: 0.00000097 # $0.97 / 1M
 
   - model_name: cohere_english_v3
     litellm_params:
-      model: custom_openai/cohere_english_v3
+      model: openai/cohere_english_v3
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
 
   - model_name: text-embedding-005
     litellm_params:
-      model: custom_openai/text-embedding-005
+      model: openai/text-embedding-005
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
 
@@ -152,28 +182,34 @@ model_list:
   # ==========================================
   - model_name: claude-3-5-sonnet-20241022
     litellm_params:
-      model: custom_openai/claude_4_6_sonnet
+      model: openai/claude_4_6_sonnet
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.0000033
       output_cost_per_token: 0.0000165
 
   - model_name: claude-3-5-haiku-20241022
     litellm_params:
-      model: custom_openai/claude_4_5_haiku
+      model: openai/claude_4_5_haiku
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.0000011
       output_cost_per_token: 0.0000055
 
   - model_name: claude-3-7-sonnet-20250219
     litellm_params:
-      model: custom_openai/claude_4_6_sonnet
+      model: openai/claude_4_6_sonnet
       api_base: https://api.dot.usai.gov/api/v1
       api_key: os.environ/DOT_USAI_API_KEY
     model_info:
+      supports_function_calling: true
+      supports_tool_choice: true
       input_cost_per_token: 0.0000033
       output_cost_per_token: 0.0000165
 
@@ -185,4 +221,13 @@ router_settings:
 
 litellm_settings:
   drop_params: true
+  modify_params: true
   drop_headers: ["anthropic-beta"]
+  additional_drop_params:
+    - "tools[*].input_examples"
+    - "tools[*].cache_control"
+    - "tools[*].defer_loading"
+    - "tools[*].strict"
+
+general_settings:
+  set_verbose: true

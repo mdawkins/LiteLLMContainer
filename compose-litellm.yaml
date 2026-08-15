@@ -49,6 +49,7 @@ services:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       AWS_REGION: ${AWS_REGION:-us-east-1}
       DOT_USAI_API_KEY: ${DOT_USAI_API_KEY}
+      LITELLM_USE_CHAT_COMPLETIONS_URL_FOR_ANTHROPIC_MESSAGES: "true"
     depends_on:
       litellm-db:
         condition: service_healthy
