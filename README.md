@@ -72,6 +72,11 @@ deleting the stack and rebuilding images is not. PostgreSQL is not recreated by
 changes environment mappings or Codex worker configuration, it refuses the
 live-only path and requires `stackctl providers` first.
 
+The host helper scripts require Python 3.7 or newer; Python 3.10+ is
+recommended. On older VMs, install a supported Python and create
+`./.venv`, then activate it before running `brokerctl.py`, `stackctl.sh`, or
+`prerequisites.sh`. The systemd unit prefers that virtualenv automatically.
+
 Do not casually change `POSTGRES_PASSWORD`, `DATABASE_URL`, or
 `LITELLM_SALT_KEY`. Provider-token changes are safe with `providers`; database
 credential migration is a separate administrative operation. The salt is

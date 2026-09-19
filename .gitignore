@@ -6,5 +6,6 @@
 .env.*
 secrets/
 .generated/
+.venv/
 __pycache__/
 *.pyc

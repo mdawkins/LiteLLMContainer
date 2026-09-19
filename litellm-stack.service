@@ -11,6 +11,8 @@ WorkingDirectory=__PROJECT_DIR__
 
 Environment=XDG_RUNTIME_DIR=/run/user/__UID__
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/__UID__/bus
+# Prefer the project virtualenv when installed; fall back to system binaries.
+Environment=PATH=__PROJECT_DIR__/.venv/bin:/usr/local/bin:/usr/bin:/bin
 
 ExecStart=/usr/bin/bash __PROJECT_DIR__/stackctl.sh start
 ExecStop=/usr/bin/bash __PROJECT_DIR__/stackctl.sh stop
