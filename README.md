@@ -57,11 +57,12 @@ boots do not rebuild images.
 | Dockerfile, source patch, nginx files, or image digest | `./stackctl.sh image` | Builds and recreates the stack |
 | Ordinary boot/start | `./stackctl.sh start` | Starts existing containers/images and reconciles live state |
 
-The nginx self-signed certificate is persisted in `nginx_certs/`. The nginx
-entrypoint reuses it when the certificate and RSA key are valid, match
-`HOST_IP`, and have more than 30 days remaining. It regenerates the pair only
-when either file is missing, invalid, mismatched, changed to a different IP,
-or near expiry.
+The nginx self-signed certificate is persisted in `nginx_certs/`. `stackctl.sh`
+uses the host's `openssl` command to reuse it when the certificate and RSA key
+are valid, match `HOST_IP`, and have more than 30 days remaining. It regenerates
+the pair only when either file is missing, invalid, mismatched, changed to a
+different IP, or near expiry. The nginx image does not install packages at
+build time or generate certificates inside the container.
 
 Container environment is fixed when a process starts, so an edited `.env`
 cannot be hot-reloaded into an existing container. Recreation is required, but

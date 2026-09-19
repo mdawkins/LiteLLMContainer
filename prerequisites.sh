@@ -30,6 +30,11 @@ export VOLUMES
 echo "  CONTAINERS=$CONTAINERS"
 echo "  VOLUMES=$VOLUMES"
 
+if ! command -v openssl >/dev/null 2>&1; then
+    echo "ERROR: openssl is required on the host for nginx TLS certificate management."
+    exit 1
+fi
+
 # --- 2. Rootless Podman — unprivileged ports and linger ---
 echo ""
 echo "[2/8] Configuring rootless podman (ports 80/443, linger)..."

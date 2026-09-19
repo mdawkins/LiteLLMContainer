@@ -1,7 +1,9 @@
 FROM docker.io/library/nginx:1.31.5-alpine3.24@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3
 
-# The entrypoint validates and creates the persisted self-signed certificate.
-RUN apk add --no-cache openssl
+# TLS certificates are generated and validated by stackctl.sh on the host.
+# Keeping certificate lifecycle outside this image avoids requiring Alpine
+# package-repository access during every build. The certificate/key are mounted
+# at runtime from ./nginx_certs.
 
 # Pre-create nginx's cache/temp dirs so the master process (running without
 # CAP_CHOWN due to cap_drop: ALL) doesn't try to chown them at startup —
