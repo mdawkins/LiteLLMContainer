@@ -6,14 +6,13 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-User=$USER
-WorkingDirectory=/Build/Containers/LLMLiteContainer
+User=mdawkins
+WorkingDirectory=/home/mdawkins/Build/Containers/LiteLLMContainer
 
-# Required for rootless podman: user runtime dir and dbus session
-Environment=XDG_RUNTIME_DIR=/run/user/__UID__
-Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/__UID__/bus
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 
-ExecStartPre=/Build/Containers/LLMLiteContainer/gen-env.sh
+ExecStartPre=/usr/bin/bash /home/mdawkins/Build/Containers/LiteLLMContainer/gen-env.sh
 ExecStart=/usr/bin/podman-compose -f compose-litellm.yaml up -d --build
 ExecStop=/usr/bin/podman-compose -f compose-litellm.yaml down
 

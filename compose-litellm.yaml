@@ -60,6 +60,8 @@ services:
     build:
       context: ./litellm_service
       dockerfile: Dockerfile
+    volumes:
+      - ./litellm_service/config.yaml:/app/config.yaml:ro
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -86,7 +88,7 @@ services:
       context: ./nginx_service
       dockerfile: Dockerfile
     volumes:
-      - ./nginx_certs:/etc/nginx/certs:z
+      - ./nginx_certs:/etc/nginx/certs
     restart: unless-stopped
     environment:
       PROXY_IP: ${HOST_IP}

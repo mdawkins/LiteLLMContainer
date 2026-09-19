@@ -2,7 +2,7 @@
 #FROM ghcr.io/berriai/litellm@sha256:1f16117e4a5707116729c3dea53505e5b2fabe7c63fe6ab02c046a9b42b222fe
 FROM ghcr.io/berriai/litellm:v1.96.2@sha256:154e23bb5f31b1f10e16392a8ef299bd2cde08de3a64a6849002cfcc25ce3c63
 
-COPY config.yaml /app/config.yaml
+#COPY config.yaml /app/config.yaml
 
 # Fix LiteLLM tool_use delta chunk discarding bug (Issues #25321 / #24134)
 #COPY patch_litellm.py /tmp/patch_litellm.py
