@@ -9,7 +9,7 @@ FROM ghcr.io/berriai/litellm:v1.101.0@sha256:d295634e09c648dcdb72c4cc2dd226f5fb8
 #RUN /app/.venv/bin/python3 /tmp/patch_litellm.py && rm /tmp/patch_litellm.py
 COPY apply_patch.py /tmp/apply_patch.py
 COPY test_apply_patch.py /tmp/test_apply_patch.py
-RUN /app/.venv/bin/python3 -m unittest -v /tmp/test_apply_patch.py \
+RUN /app/.venv/bin/python3 -m unittest discover -s /tmp -p 'test_apply_patch.py' -v \
     && /app/.venv/bin/python3 /tmp/apply_patch.py \
     && rm /tmp/apply_patch.py /tmp/test_apply_patch.py
 
