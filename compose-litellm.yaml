@@ -11,7 +11,7 @@ services:
   # RDS lives on its own VPC ENI, NOT on internal_net — isolation comes from
   # the RDS security group + PubliclyAccessible:false, not bridge membership.
   litellm-db:
-    image: docker.io/library/postgres:18@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
+    image: docker.io/library/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
     container_name: litellm-db
     user: "999:999"
     restart: unless-stopped
@@ -57,6 +57,7 @@ services:
 
   litellm-proxy:
     container_name: litellm-proxy
+    image: localhost/litellm-proxy:local
     build:
       context: ./litellm_service
       dockerfile: Dockerfile
@@ -66,8 +67,10 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      # Stable encryption key for DB-stored provider credentials. Never rotate
+      # this casually: existing encrypted model credentials depend on it.
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY}
       AWS_REGION: ${AWS_REGION:-us-east-1}
-      DOT_USAI_API_KEY: ${DOT_USAI_API_KEY}
       LITELLM_USE_CHAT_COMPLETIONS_URL_FOR_ANTHROPIC_MESSAGES: "true"
 #      HEADROOM_API_BASE: "http://headroom:8787"
     depends_on:

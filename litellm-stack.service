@@ -6,18 +6,17 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-User=mdawkins
-WorkingDirectory=/home/mdawkins/Build/Containers/LiteLLMContainer
+User=$USER
+WorkingDirectory=__PROJECT_DIR__
 
-Environment=XDG_RUNTIME_DIR=/run/user/1000
-Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+Environment=XDG_RUNTIME_DIR=/run/user/__UID__
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/__UID__/bus
 
-ExecStartPre=/usr/bin/bash /home/mdawkins/Build/Containers/LiteLLMContainer/gen-env.sh
-ExecStart=/usr/bin/podman-compose -f compose-litellm.yaml up -d --build
-ExecStop=/usr/bin/podman-compose -f compose-litellm.yaml down
+ExecStart=/usr/bin/bash __PROJECT_DIR__/stackctl.sh start
+ExecStop=/usr/bin/bash __PROJECT_DIR__/stackctl.sh stop
 
 Restart=no
-TimeoutStartSec=120
+TimeoutStartSec=300
 TimeoutStopSec=30
 
 [Install]

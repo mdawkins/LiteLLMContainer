@@ -19,8 +19,13 @@ for var in "${REQUIRED_VARS[@]}"; do
     fi
 done
 
-CONTAINERS="${CONTAINERS:-/Build/Containers}"
-VOLUMES="${VOLUMES:-/Build/Volumes}"
+ENV_VOLUMES=""
+if [[ -f "${SCRIPT_DIR}/.env" ]]; then
+    ENV_VOLUMES=$(sed -n 's/^VOLUMES=//p' "${SCRIPT_DIR}/.env" | tail -n 1)
+fi
+CONTAINERS="${CONTAINERS:-${HOME}/Build/Containers}"
+VOLUMES="${VOLUMES:-${ENV_VOLUMES:-${HOME}/Opt/Volumes}}"
+export VOLUMES
 
 echo "  CONTAINERS=$CONTAINERS"
 echo "  VOLUMES=$VOLUMES"
@@ -64,7 +69,7 @@ fi
 echo ""
 echo "[4/8] Creating persistent volume directories..."
 
-mkdir -p "${VOLUMES}/litellm_pgvol"
+mkdir -p "${VOLUMES}/litellm_pgvol" "${VOLUMES}/litellm_codex"
 echo "  Created: ${VOLUMES}/litellm_pgvol"
 
 # Postgres runs as UID 999 inside the container. Under rootless podman the host
@@ -93,10 +98,13 @@ echo ""
 echo "[6/8] Generating .env and making scripts executable..."
 
 chmod +x "${SCRIPT_DIR}/gen-env.sh" \
+         "${SCRIPT_DIR}/stackctl.sh" \
+         "${SCRIPT_DIR}/brokerctl.py" \
          "${SCRIPT_DIR}/create-ai-user.sh" \
          "${SCRIPT_DIR}/check-ai-user.sh" \
-         "${SCRIPT_DIR}/revoke-ai-user.sh"
-"${SCRIPT_DIR}/gen-env.sh"
+         "${SCRIPT_DIR}/revoke-ai-user.sh" \
+         "${SCRIPT_DIR}/update-ai-user.sh"
+"${SCRIPT_DIR}/stackctl.sh" render
 
 # --- 5. Install systemd boot unit ---
 echo ""
@@ -110,6 +118,7 @@ CURRENT_UID=$(id -u "${CURRENT_USER}")
 UNIT_TMP=$(mktemp)
 sed -e "s/\$USER/${CURRENT_USER}/g" \
     -e "s/__UID__/${CURRENT_UID}/g" \
+    -e "s|__PROJECT_DIR__|${SCRIPT_DIR}|g" \
     "${UNIT_SRC}" > "${UNIT_TMP}"
 
 if [[ ! -f "${UNIT_DST}" ]] || ! diff -q "${UNIT_TMP}" "${UNIT_DST}" &>/dev/null; then
@@ -133,9 +142,9 @@ echo ""
 echo "[8/8] Verifying container image availability..."
 
 IMAGES=(
-    "docker.io/library/postgres:18@sha256:32ca0af8e77bfb8c6610c488e4691f83f972a3e9e64d3b02facf3ab111ad5500"
-    "ghcr.io/berriai/litellm:v1.92.0@sha256:9ef6f45bc0104940571765e610c52a1d761b5ec85efcd193795281086ee61277"
-    "docker.io/library/nginx:alpine@sha256:7068961d45b07b2af510ac002e9daa63a1d3eba2111202d6768798690800fffd"
+    "docker.io/library/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280"
+    "ghcr.io/berriai/litellm:v1.101.0@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b"
+    "docker.io/library/nginx:1.31.5-alpine3.24@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3"
 )
 
 for img in "${IMAGES[@]}"; do
@@ -148,12 +157,15 @@ for img in "${IMAGES[@]}"; do
     fi
 done
 
+echo "  Building pinned local images (initial setup / digest changes only)..."
+podman-compose -f "${SCRIPT_DIR}/compose-litellm.yaml" \
+    -f "${SCRIPT_DIR}/.generated/compose-brokers.yaml" build
+
 echo ""
 echo "============================================"
 echo "All prerequisites satisfied."
 echo "You can now run:"
-echo "  podman-compose -f ${SCRIPT_DIR}/compose-litellm.yaml build"
-echo "  podman-compose -f ${SCRIPT_DIR}/compose-litellm.yaml up -d"
+echo "  ${SCRIPT_DIR}/stackctl.sh start"
 echo ""
 echo "The stack will auto-start on boot via litellm-stack.service."
 echo "AWS credentials are fetched from IMDS at runtime — no manual refresh needed."

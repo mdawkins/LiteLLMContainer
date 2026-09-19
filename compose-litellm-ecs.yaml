@@ -56,7 +56,7 @@ services:
   # ---- PostgreSQL --------------------------------------------------------
   litellm-db:
     <<: *ecs-common
-    image: postgres:18@sha256:32ca0af8e77bfb8c6610c488e4691f83f972a3e9e64d3b02facf3ab111ad5500
+    image: docker.io/library/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
     container_name: litellm-db
     user: "999:999"
     environment:
@@ -91,7 +91,7 @@ services:
   # ---- LiteLLM Proxy ----------------------------------------------------
   litellm-proxy:
     <<: *ecs-common
-    image: ghcr.io/berriai/litellm:v1.92.0@sha256:9ef6f45bc0104940571765e610c52a1d761b5ec85efcd193795281086ee61277
+    image: ghcr.io/berriai/litellm:v1.101.0@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b
     container_name: litellm-proxy
     build:
       context: ./litellm_service
@@ -142,7 +142,7 @@ services:
 
   # litellm-nginx:
   #   <<: *ecs-common
-  #   image: nginx:alpine@sha256:7068961d45b07b2af510ac002e9daa63a1d3eba2111202d6768798690800fffd
+  #   image: docker.io/library/nginx:1.31.5-alpine3.24@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3
   #   container_name: litellm-nginx
   #   build:
   #     context: ./nginx_service

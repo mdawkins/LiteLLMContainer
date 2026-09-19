@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Restricts outbound traffic from the litellm-proxy container's bridge subnet
-# (internal_net) to only DNS, the EC2 IMDS, and Amazon Bedrock — the "killer
-# control" for a compromised dependency trying to call home to a C2 server.
+# Restricts outbound traffic from the complete LiteLLM bridge subnet. Every
+# enabled external broker must have an explicit destination allowlist.
 # See SecurityRemediationPlan.md, open question #1.
 #
 # NOT wired into prerequisites.sh and NOT run automatically: the Bedrock
@@ -33,6 +32,17 @@ BEDROCK_ENDPOINT_CIDR="${BEDROCK_ENDPOINT_CIDR:-}"     # e.g. 10.0.5.10/32
 # open question #1.
 BEDROCK_PUBLIC_CIDRS="${BEDROCK_PUBLIC_CIDRS:-}"       # space-separated CIDRs
 
+# USAI and Codex/ChatGPT use public HTTPS endpoints whose addresses may change.
+# Supply reviewed CIDRs from the network team, or route these destinations
+# through a controlled egress proxy with a stable CIDR. Do not snapshot DNS
+# answers once and assume they are permanent.
+USAI_ENDPOINT_CIDRS="${USAI_ENDPOINT_CIDRS:-}"         # space-separated CIDRs
+CODEX_ENDPOINT_CIDRS="${CODEX_ENDPOINT_CIDRS:-}"       # space-separated CIDRs
+
+# Required only for Bedrock accounts that assume another role instead of using
+# the instance role directly.
+STS_ENDPOINT_CIDRS="${STS_ENDPOINT_CIDRS:-}"           # space-separated CIDRs
+
 # --- Amazon RDS (optional) — set only if litellm-proxy has been switched to
 # an RDS-backed DATABASE_URL (see rds-postgres.yaml). Traffic to the local
 # litellm-db container never leaves the host and doesn't need this; traffic
@@ -40,10 +50,28 @@ BEDROCK_PUBLIC_CIDRS="${BEDROCK_PUBLIC_CIDRS:-}"       # space-separated CIDRs
 RDS_ENDPOINT_CIDR="${RDS_ENDPOINT_CIDR:-}"             # e.g. 10.0.6.20/32
 RDS_PORT="${RDS_PORT:-5432}"
 
-if [[ -z "${BEDROCK_ENDPOINT_CIDR}" && -z "${BEDROCK_PUBLIC_CIDRS}" ]]; then
+ENABLED_BROKERS=$(python3 - "$(dirname "${BASH_SOURCE[0]}")/broker-registry.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    registry = json.load(handle)
+print(" ".join(sorted({a["broker"] for a in registry.get("accounts", []) if a.get("enabled")})))
+PY
+)
+
+if [[ " ${ENABLED_BROKERS} " == *" bedrock "* && -z "${BEDROCK_ENDPOINT_CIDR}" && -z "${BEDROCK_PUBLIC_CIDRS}" ]]; then
     echo "ERROR: set BEDROCK_ENDPOINT_CIDR or BEDROCK_PUBLIC_CIDRS before running." >&2
     echo "  This is the open question for the AWS architects (SecurityRemediationPlan.md)." >&2
     echo "  Example: BEDROCK_ENDPOINT_CIDR=10.0.5.10/32 ./harden-egress.sh" >&2
+    exit 1
+fi
+if [[ " ${ENABLED_BROKERS} " == *" usai "* && -z "${USAI_ENDPOINT_CIDRS}" ]]; then
+    echo "ERROR: USAI is enabled; set USAI_ENDPOINT_CIDRS before applying deny-by-default egress." >&2
+    exit 1
+fi
+if [[ " ${ENABLED_BROKERS} " == *" codex "* && -z "${CODEX_ENDPOINT_CIDRS}" ]]; then
+    echo "ERROR: Codex is enabled; set CODEX_ENDPOINT_CIDRS before applying deny-by-default egress." >&2
     exit 1
 fi
 
@@ -64,32 +92,52 @@ if ! sudo firewall-cmd --permanent --info-policy="${POLICY_NAME}" &>/dev/null; t
     echo "  no catch-all rule; only the source-scoped rich rules below take effect)."
 fi
 
-# Allow rules run first (negative priority). DNS is required to resolve
-# Bedrock/STS/IMDS hostnames; IMDS and Bedrock are the only other allowed
-# destinations.
+# Allow rules run first (negative priority). DNS is required to resolve broker
+# hostnames. Internal traffic preserves proxy/worker/database connectivity.
 sudo firewall-cmd --permanent --policy="${POLICY_NAME}" \
     --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" port port=\"53\" protocol=\"udp\" accept"
 sudo firewall-cmd --permanent --policy="${POLICY_NAME}" \
     --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" port port=\"53\" protocol=\"tcp\" accept"
 sudo firewall-cmd --permanent --policy="${POLICY_NAME}" \
-    --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" destination address=\"169.254.169.254/32\" accept"
+    --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" destination address=\"${SUBNET}\" accept"
+sudo firewall-cmd --permanent --policy="${POLICY_NAME}" \
+    --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" destination address=\"169.254.169.254/32\" port port=\"80\" protocol=\"tcp\" accept"
 
-if [[ -n "${BEDROCK_ENDPOINT_CIDR}" ]]; then
-    sudo firewall-cmd --permanent --policy="${POLICY_NAME}" \
-        --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" destination address=\"${BEDROCK_ENDPOINT_CIDR}\" accept"
-else
-    NUM_CIDRS=$(wc -w <<< "${BEDROCK_PUBLIC_CIDRS}")
-    echo "WARNING: using BEDROCK_PUBLIC_CIDRS fallback (${NUM_CIDRS} CIDRs) — this is the" >&2
-    echo "  generic AWS 'AMAZON' regional range, not a Bedrock-specific allow-list (AWS" >&2
-    echo "  publishes no BEDROCK-tagged entry in ip-ranges.json). It blocks non-AWS-hosted" >&2
-    echo "  C2 but NOT C2 rented on AWS infrastructure. Treat this as a temporary stopgap" >&2
-    echo "  only, pending a Bedrock VPC endpoint. See SecurityRemediationPlan.md, open" >&2
-    echo "  question #1." >&2
-    for cidr in ${BEDROCK_PUBLIC_CIDRS}; do
+allow_https_cidrs() {
+    local label="$1"
+    local cidrs="$2"
+    local cidr
+    [[ -z "${cidrs}" ]] && return 0
+    for cidr in ${cidrs}; do
+        python3 -c 'import ipaddress,sys; ipaddress.ip_network(sys.argv[1], strict=False)' "${cidr}"
         sudo firewall-cmd --permanent --policy="${POLICY_NAME}" \
-            --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" destination address=\"${cidr}\" accept"
+            --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" destination address=\"${cidr}\" port port=\"443\" protocol=\"tcp\" accept"
     done
+    echo "  Allowed ${label} HTTPS CIDRs"
+}
+
+if [[ " ${ENABLED_BROKERS} " == *" bedrock "* ]]; then
+    if [[ -n "${BEDROCK_ENDPOINT_CIDR}" ]]; then
+        sudo firewall-cmd --permanent --policy="${POLICY_NAME}" \
+            --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" destination address=\"${BEDROCK_ENDPOINT_CIDR}\" port port=\"443\" protocol=\"tcp\" accept"
+    else
+        NUM_CIDRS=$(wc -w <<< "${BEDROCK_PUBLIC_CIDRS}")
+        echo "WARNING: using BEDROCK_PUBLIC_CIDRS fallback (${NUM_CIDRS} CIDRs) — this is the" >&2
+        echo "  generic AWS 'AMAZON' regional range, not a Bedrock-specific allow-list (AWS" >&2
+        echo "  publishes no BEDROCK-tagged entry in ip-ranges.json). It blocks non-AWS-hosted" >&2
+        echo "  C2 but NOT C2 rented on AWS infrastructure. Treat this as a temporary stopgap" >&2
+        echo "  only, pending a Bedrock VPC endpoint. See SecurityRemediationPlan.md, open" >&2
+        echo "  question #1." >&2
+        for cidr in ${BEDROCK_PUBLIC_CIDRS}; do
+            sudo firewall-cmd --permanent --policy="${POLICY_NAME}" \
+                --add-rich-rule="rule priority=\"-100\" family=\"ipv4\" source address=\"${SUBNET}\" destination address=\"${cidr}\" port port=\"443\" protocol=\"tcp\" accept"
+        done
+    fi
 fi
+
+allow_https_cidrs "USAI" "${USAI_ENDPOINT_CIDRS}"
+allow_https_cidrs "Codex/ChatGPT" "${CODEX_ENDPOINT_CIDRS}"
+allow_https_cidrs "AWS STS" "${STS_ENDPOINT_CIDRS}"
 
 if [[ -n "${RDS_ENDPOINT_CIDR}" ]]; then
     sudo firewall-cmd --permanent --policy="${POLICY_NAME}" \
@@ -105,8 +153,8 @@ sudo firewall-cmd --reload
 
 echo ""
 echo "Egress policy '${POLICY_NAME}' applied. Traffic sourced from ${SUBNET} is now"
-echo "denied by default; only DNS, IMDS, and the configured Bedrock destination(s)"
-echo "are allowed. No other zone, port, or subnet on this host was modified."
+echo "denied by default; only internal traffic, DNS, IMDS, and configured broker/RDS"
+echo "destinations are allowed. No other zone, port, or subnet was modified."
 echo ""
 echo "Verify:"
 echo "  sudo firewall-cmd --policy=${POLICY_NAME} --list-all"

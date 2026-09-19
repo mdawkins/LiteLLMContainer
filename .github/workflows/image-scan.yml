@@ -1,0 +1,61 @@
+# UNENABLED REFERENCE EXAMPLE — this workflow has never been wired into a
+# live CI/CD pipeline for this repo. It exists to show one possible shape of
+# an image-scan gate using scan-image.sh (see repo root), not as evidence
+# that CI/CD is running today. See SecurityRemediationPlan.md's open
+# question on CI runner environment (self-hosted runner vs. GitHub-hosted,
+# registry mirror) before enabling this for real. The scanner tool itself is
+# not fixed to Trivy — scan-image.sh also supports grype or a custom command
+# via the SCANNER env var; this example just picks trivy as one default.
+name: Image scan (reference example — not enabled)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "litellm_service/**"
+      - "nginx_service/**"
+      - "compose-litellm.yaml"
+      - "scan-image.sh"
+      - ".github/workflows/image-scan.yml"
+  pull_request:
+    paths:
+      - "litellm_service/**"
+      - "nginx_service/**"
+      - "compose-litellm.yaml"
+      - "scan-image.sh"
+      - ".github/workflows/image-scan.yml"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [litellm_service, nginx_service]
+    env:
+      SCANNER: trivy
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | \
+            sh -s -- -b /usr/local/bin
+
+      - name: Build ${{ matrix.service }} image
+        run: docker build -t local/${{ matrix.service }}:ci ./${{ matrix.service }}
+
+      - name: Scan (config + vulnerabilities + SBOM)
+        run: |
+          ./scan-image.sh \
+            --image local/${{ matrix.service }}:ci \
+            --context ./${{ matrix.service }} \
+            --sbom-out sbom-${{ matrix.service }}.spdx.json \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed true
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.service }}
+          path: sbom-${{ matrix.service }}.spdx.json
+          retention-days: 90

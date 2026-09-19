@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "accounts": [
+    {
+      "broker": "usai",
+      "id": "primary",
+      "enabled": true,
+      "api_base": "https://api.dot.usai.gov/api/v1",
+      "api_key_env": "DOT_USAI_API_KEY",
+      "models": [
+        {
+          "route": "claude-5-opus",
+          "upstream": "claude-opus-5",
+          "capabilities": {"supports_prompt_caching": true, "supports_function_calling": true, "supports_tool_choice": true},
+          "pricing": {"input_cost_per_token": 0.000005, "output_cost_per_token": 0.000025}
+        },
+        {
+          "route": "claude-5-sonnet",
+          "upstream": "claude-sonnet-5",
+          "capabilities": {"supports_prompt_caching": true, "supports_function_calling": true, "supports_tool_choice": true},
+          "pricing": {"input_cost_per_token": 0.000002, "output_cost_per_token": 0.00001}
+        },
+        {
+          "route": "claude-4.5-haiku",
+          "upstream": "claude_4_5_haiku",
+          "capabilities": {"supports_prompt_caching": true, "supports_function_calling": true, "supports_tool_choice": true},
+          "pricing": {"input_cost_per_token": 0.0000011, "output_cost_per_token": 0.0000055}
+        },
+        {
+          "route": "gpt-5.5",
+          "upstream": "gpt_5_5_default_v2",
+          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
+          "pricing": {"input_cost_per_token": 0.000005, "output_cost_per_token": 0.00003}
+        },
+        {
+          "route": "gpt-5.4",
+          "upstream": "gpt_5_4_default_v2",
+          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
+          "pricing": {"input_cost_per_token": 0.0000025, "output_cost_per_token": 0.000015}
+        },
+        {
+          "route": "gpt-5.2",
+          "upstream": "gpt_5_2_default_v2",
+          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
+          "pricing": {"input_cost_per_token": 0.00000175, "output_cost_per_token": 0.000014}
+        },
+        {
+          "route": "gemini-2.5-pro",
+          "upstream": "gemini-2.5-pro",
+          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
+          "pricing": {"input_cost_per_token": 0.00000125, "output_cost_per_token": 0.00001}
+        },
+        {
+          "route": "gemini-2.5-flash",
+          "upstream": "gemini-2.5-flash",
+          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
+          "pricing": {"input_cost_per_token": 3e-7, "output_cost_per_token": 0.0000025}
+        },
+        {
+          "route": "gemini-2.5-flash-lite",
+          "upstream": "gemini-2.5-flash-lite",
+          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
+          "pricing": {"input_cost_per_token": 1e-7, "output_cost_per_token": 1e-7}
+        },
+        {
+          "route": "grok-4",
+          "upstream": "grok_4_default_v2",
+          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
+          "pricing": {"input_cost_per_token": 0.000003, "output_cost_per_token": 0.000015}
+        },
+        {
+          "route": "llama-4-maverick",
+          "upstream": "llama_4_maverick",
+          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
+          "pricing": {"input_cost_per_token": 2.4e-7, "output_cost_per_token": 9.7e-7}
+        }
+      ]
+    },
+    {
+      "broker": "bedrock",
+      "id": "instance-role",
+      "enabled": true,
+      "region_env": "AWS_REGION",
+      "models": [
+        {"route": "claude-sonnet-5", "upstream": "us.anthropic.claude-sonnet-5"},
+        {"route": "claude-opus-4.8", "upstream": "us.anthropic.claude-opus-4-8"},
+        {"route": "claude-sonnet-4.6", "upstream": "us.anthropic.claude-sonnet-4-6"}
+      ]
+    },
+    {
+      "broker": "codex",
+      "id": "primary",
+      "enabled": false,
+      "auth_dir": "${VOLUMES}/litellm_codex/primary",
+      "worker_key_env": "CODEX_PRIMARY_WORKER_KEY",
+      "models": [
+        {"route": "gpt-5.4", "upstream": "gpt-5.4"},
+        {"route": "gpt-5.4-pro", "upstream": "gpt-5.4-pro"},
+        {"route": "gpt-5.3-codex", "upstream": "gpt-5.3-codex"},
+        {"route": "gpt-5.3-codex-spark", "upstream": "gpt-5.3-codex-spark"},
+        {"route": "gpt-5.3-instant", "upstream": "gpt-5.3-instant"},
+        {"route": "gpt-5.3-chat-latest", "upstream": "gpt-5.3-chat-latest"},
+        {"route": "gpt-5.2-codex", "upstream": "gpt-5.2-codex"},
+        {"route": "gpt-5.2", "upstream": "gpt-5.2"},
+        {"route": "gpt-5.1-codex-max", "upstream": "gpt-5.1-codex-max"},
+        {"route": "gpt-5.1-codex-mini", "upstream": "gpt-5.1-codex-mini"}
+      ]
+    }
+  ],
+  "organizations": [],
+  "teams": []
+}

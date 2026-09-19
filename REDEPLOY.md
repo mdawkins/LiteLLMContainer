@@ -1,100 +1,68 @@
-# Redeploy Runbook — AWS Linux VM
-
-Steps to pull a new revision of this repo and redeploy the LiteLLM stack on
-an already-running RHEL/AWS Linux VM. This is for the VM target only — there
-is nothing to redeploy on ECS since no ECS resources exist yet.
-
-## 1. Pre-flight
+# Redeploy runbook
 
 ```shell
-cd /Build/Containers/LLMLiteContainer   # or wherever this repo lives on the VM
+cd /path/to/LiteLLMContainer
 git status
-```
-
-If `git status` shows uncommitted local changes, stop and resolve them first
-(commit, stash, or discard deliberately) — a VM checkout should stay a clean
-mirror of a known commit. Note the current commit as your rollback target:
-
-```shell
 OLD_SHA=$(git rev-parse HEAD)
-echo "$OLD_SHA"   # write this down / keep the shell open
-```
-
-## 2. Pull
-
-```shell
 git pull
-```
-
-## 3. Review what changed, re-run prerequisites if needed
-
-```shell
-git log --oneline "$OLD_SHA"..HEAD
 git diff --stat "$OLD_SHA"..HEAD
 ```
 
-`prerequisites.sh` is idempotent — every step checks current state before
-acting, so re-running it is always safe. If `prerequisites.sh`,
-`litellm-stack.service`, `gen-env.sh`, `harden-egress.sh`, or anything
-touching the volume/network setup changed — **or you're not sure** — just
-re-run it rather than hand-deciding:
+Choose the smallest applicable operation:
+
+```shell
+# Registry model/pricing edits only: live, no container restart
+./stackctl.sh models
+
+# Registry organization/team edits only: live, no container restart
+./stackctl.sh access
+
+# .env provider tokens, Codex accounts, or config.yaml: recreate app processes
+./stackctl.sh reload
+
+# Dockerfiles, patch files, nginx build inputs, or pinned digests: rebuild
+./stackctl.sh image
+```
+
+The current image pins are LiteLLM v1.101.0, nginx 1.31.5-alpine3.24, and
+PostgreSQL 18.6. The PostgreSQL change is a minor release within major version
+18, so it does not require a dump/restore or `pg_upgrade`; take a normal backup
+before any production change and keep the volume. A future PostgreSQL major
+upgrade must use a separate migration plan.
+
+`reload` is the safe no-build path for `.env` or `litellm_service/config.yaml`
+changes. It re-renders the generated broker compose file, recreates the
+LiteLLM proxy and any Codex workers, waits for health, and reapplies managed
+models and access grants. `providers` remains an equivalent compatibility alias.
+
+If deployment helpers or the systemd unit changed, rerun the idempotent setup
+before selecting the operation:
 
 ```shell
 ./prerequisites.sh
 ```
 
-## 4. Restart the stack
+`prerequisites.sh` builds because it is the initial/upgrade path. The installed
+systemd unit does not build on every boot and does not delete containers when
+stopped.
+
+Verify:
 
 ```shell
-sudo systemctl restart litellm-stack.service
-```
-
-No separate `podman-compose build` step is needed first: the unit's
-`ExecStart` already runs `podman-compose -f compose-litellm.yaml up -d
---build` on every start, which rebuilds `litellm-proxy`/`litellm-nginx` from
-the current source and the current pinned base-image digests. `ExecStartPre`
-also re-runs `gen-env.sh`, which preserves `POSTGRES_PASSWORD`,
-`LITELLM_MASTER_KEY`, and `DATABASE_URL` across the restart.
-
-## 5. Verify
-
-```shell
-systemctl status litellm-stack.service        # expect active (exited) — it's a oneshot unit
-podman ps                                      # expect litellm-db, litellm-proxy, litellm-nginx all Up,
-                                                # litellm-db additionally (healthy)
-journalctl -u litellm-stack.service -n 50 --no-pager
-podman logs --tail 50 litellm-proxy            # check for DB-connect or Bedrock-auth errors
-```
-
-Smoke test — exercises TLS termination, proxy auth, and (if DB-backed) key
-validation in one call:
-
-```shell
+./stackctl.sh status
+systemctl status litellm-stack.service
+journalctl -u litellm-stack.service -n 100 --no-pager
+podman logs --tail 100 litellm-proxy
 curl -sk https://localhost/v1/models \
-  -H "Authorization: Bearer $(grep LITELLM_MASTER_KEY .env | cut -d= -f2-)"
+  -H "Authorization: Bearer $(sed -n 's/^LITELLM_MASTER_KEY=//p' .env)"
 ```
 
-Expect an HTTP 200 with the configured model list. Anything else — stop here
-and go to Rollback.
+If an image upgrade fails while applying the source patch, do not bypass the
+failure. Compare the new upstream streaming adapter with
+`litellm_service/apply_patch.py`, update the reviewed source contract and its
+tests, and rebuild.
 
-## 6. Rollback (only if step 5 fails)
-
-```shell
-git log --oneline -10          # confirm the last-known-good SHA (OLD_SHA from step 1)
-git checkout "$OLD_SHA"
-```
-
-Then repeat steps 3–5 (re-run `prerequisites.sh` if the failed revision
-touched infra files, `systemctl restart`, re-verify). `.env` is gitignored
-and untouched by `git checkout`, so `gen-env.sh`'s preserve-on-regen logic
-means `POSTGRES_PASSWORD`, `LITELLM_MASTER_KEY`, and `DATABASE_URL` survive
-the rollback unchanged.
-
-## 7. Switching persistence to Amazon RDS on this pass
-
-Only relevant if you're also migrating off the local `litellm-db` container
-during this redeploy — see the "Optional: Amazon RDS" section in
-`README.md` and `rds-postgres.yaml`. In short: follow the 3-step comment
-block above the `litellm-db` service in `compose-litellm.yaml`, set
-`DATABASE_URL` in `.env` to the RDS endpoint, then continue from step 4
-above.
+For rollback, restore the recorded revision deliberately and repeat the
+applicable operation. `.env`, PostgreSQL, and Codex auth volumes are not stored
+in Git and survive a source rollback. A registry rollback followed by
+`stackctl models` prunes only stale routes previously managed by `brokerctl`.

@@ -1,282 +1,241 @@
-# LLMLiteContainer
+# LiteLLM multi-broker gateway
 
-LiteLLM proxy stack for routing AI tool requests (Claude Code, VS Code extensions, Claude Desktop) through Amazon Bedrock on RHEL 9 with user authentication, rate limiting, token tracking, and TLS termination.
+Rootless Podman stack for deterministic routing across three broker types:
 
-## Architecture
+- Amazon Bedrock, using the instance role or an explicitly configured role
+- USAI, using one named API-key environment variable per account
+- Codex/ChatGPT, using one isolated internal LiteLLM worker per login
 
-```
-┌──────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────────────────┐
-│   Client     │────▶│  litellm-nginx   │────▶│  litellm-proxy   │────▶│   Amazon Bedrock     │
-│ (Claude CLI, │     │  (TLS Terminator │     │  (LiteLLM Proxy) │     │  (Converse API —     │
-│  VS Code,    │     │   port 443)      │     │   port 4000)     │     │   cross-region       │
-│  Desktop)    │     └──────────────────┘     └────────┬────────┘     │   inference profiles)│
-└──────────────┘        bridge: internal_net   bridge: internal_net   └──────────────────────┘
-                                                (IMDS via NAT hop)          AWS region
-                                                         │
-                                                         ▼
-                                                ┌──────────────────┐
-                                                │   litellm-db      │
-                                                │  (PostgreSQL 18)  │
-                                                │  127.0.0.1:5432   │
-                                                └──────────────────┘
+The public route name always identifies one broker account and one upstream
+model:
+
+```text
+bedrock/instance-role/claude-sonnet-5
+usai/primary/gpt-5.4
+codex/primary/gpt-5.3-codex
 ```
 
-| Service | Container Name | Image | Network | Purpose |
-|---------|---------------|-------|---------|---------|
-| `litellm-db` | `litellm-db` | `postgres:18@sha256:32ca0af8...` | `internal_net` bridge | Persistent storage for user keys, budgets, rate limits, token usage |
-| `litellm-proxy` | `litellm-proxy` | `ghcr.io/berriai/litellm:v1.92.0@sha256:9ef6f45b...` | `internal_net` bridge | Translates OpenAI/Anthropic API calls to Amazon Bedrock (Converse API); enforces auth and throttling; reaches IMDS (via NAT) for IAM credentials |
-| `litellm-nginx` | `litellm-nginx` | `nginx:alpine@sha256:7068961d...` | `internal_net` bridge | TLS termination on port 443; proxies to `litellm-proxy:4000` |
+There are no cross-broker fallbacks, router aliases, or duplicate deployments
+behind one name. A request either reaches the broker named in its route or
+fails visibly.
 
-All three images are pinned to immutable digests (see `litellm_service/Dockerfile`, `nginx_service/Dockerfile`, `compose-litellm.yaml`) rather than floating tags — never `:latest`/`:main-latest`. To bump a version: resolve the new tag's digest from the registry, review the upstream changelog, retest the stack, then update the pin deliberately. Never `podman pull` a floating tag into production.
+## Configuration model
 
-## Directory Structure
+`broker-registry.json` is the declarative source of truth for broker accounts,
+routes, organizations, and teams. It stores only secret references such as
+`DOT_USAI_API_KEY`; secret values remain in the gitignored `.env` file or in a
+Codex auth volume.
 
-```
-LLMLiteContainer/
-├── compose-litellm.yaml      # Podman Compose orchestration
-├── gen-env.sh                # Generates .env (stable secrets only — AWS auth via IMDS)
-├── prerequisites.sh          # One-shot setup (volumes, network, images, .env)
-├── litellm-stack.service     # systemd unit — copy to /etc/systemd/system/ for boot persistence
-├── create-ai-user.sh         # Provision a user API key with budget and rate limits
-├── check-ai-user.sh          # Check a user's budget spend and rate limits
-├── revoke-ai-user.sh         # Revoke a user API key immediately
-├── harden-egress.sh          # Manual: restrict litellm-proxy's egress to DNS/IMDS/Bedrock(/RDS) only
-├── scan-image.sh             # Scanner-agnostic image scan (Trivy/Grype/custom) + SBOM — run manually
-├── rds-postgres.yaml         # Optional: CloudFormation for Amazon RDS Postgres (VM or ECS)
-├── RunContainer.md           # Quick-start commands and client config snippets
-├── REDEPLOY.md               # git pull + redeploy runbook for the AWS Linux VM
-├── SecurityRemediationPlan.md # Cyber Security response — threat vector → control mapping
-├── .github/workflows/
-│   └── image-scan.yml        # Reference example only (NOT enabled) — wraps scan-image.sh;
-│                              # scanner is swappable via the SCANNER env var, not fixed to Trivy
-├── litellm_service/
-│   ├── Dockerfile            # Bakes config.yaml into the LiteLLM image (pinned by digest)
-│   └── config.yaml           # Model list, routing, caching, and drop_params settings
-└── nginx_service/
-    ├── Dockerfile            # Bakes nginx.conf + self-signed TLS cert into nginx:alpine (pinned by digest)
-    └── nginx.conf            # TLS reverse proxy — proxies to litellm-proxy:4000 over internal_net
-```
+`litellm_service/config.yaml` contains only stable proxy settings. Models are
+stored in PostgreSQL (`store_model_in_db: true`) and reconciled through
+LiteLLM's model-management API, so model edits take effect without restarting
+the proxy.
 
-## Configuration
+`brokerctl.py` validates the registry before rendering or applying it. It
+rejects fallback keys, duplicate public routes, unknown model grants, and team
+grants wider than their parent organization.
 
-### Environment Variables (compose-litellm.yaml)
-
-Variables are written to `.env` by `gen-env.sh`. AWS credentials are **not** stored in `.env` — `litellm-proxy` runs on the `internal_net` bridge and boto3 fetches them from the EC2 IMDS at request time (via the container's NAT hop), so they never expire.
-
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `POSTGRES_PASSWORD` | gen-env.sh (generated once, preserved) | Random 32-byte password for the PostgreSQL `proxy_admin` user |
-| `LITELLM_MASTER_KEY` | gen-env.sh (generated once, preserved) | `sk-` prefixed master key for the LiteLLM proxy admin API |
-| `DATABASE_URL` | gen-env.sh (computed once, preserved) | Postgres connection string. Defaults to the local `litellm-db` container; set manually to an RDS endpoint to switch (see "Optional: Amazon RDS" below) — once set, it's preserved across regeneration like the secrets above |
-| `VOLUMES` | env or default | Base path for volume mounts — defaults to `$HOME/Build/Volumes` |
-
-### Optional: Amazon RDS instead of the local Postgres container
-
-`litellm-db` (a Podman container) is the default — no AWS dependency, fast local iteration. For production-grade persistence (automated backups, encryption at rest) on either the VM or a future ECS deployment, `rds-postgres.yaml` provisions an Amazon RDS PostgreSQL instance instead. **RDS is never a member of `internal_net`** — it gets its own ENI in your VPC subnets; isolation comes from its security group (ingress locked to the client's own SG) plus `PubliclyAccessible: false`, not container-network membership.
-
-To switch:
-1. Deploy `rds-postgres.yaml` (see the header comment in that file for the `aws cloudformation deploy` command) and note the `DBEndpointAddress` output.
-2. Follow the 3-step comment block above the `litellm-db` service in `compose-litellm.yaml` (comment it out, drop the `depends_on`, set `DATABASE_URL` in `.env`).
-3. If `harden-egress.sh` is in use, set `RDS_ENDPOINT_CIDR` before re-running it, so the proxy's egress lockdown allows the new destination.
-
-IAM database authentication is available on the RDS instance but not wired into `litellm-proxy` — its 15-minute token expiry needs RDS Proxy or a refresh sidecar, tracked as an open item in `SecurityRemediationPlan.md`.
-
-### AWS Authentication
-
-`litellm-proxy` runs on the `internal_net` bridge and reaches the EC2 Instance Metadata Service (`169.254.169.254`) through the container's NAT hop rather than directly on the host interface. boto3 discovers the IAM role (`nhtsa-cdan.ec2.researcher.role`) automatically and rotates credentials in-process — no static keys, no restarts required when credentials refresh.
-
-This requires `HttpPutResponseHopLimit` on the EC2 instance's metadata options to be at least `2` — AWS's IMDSv2 default of `1` only reaches processes on the instance's primary network interface, not a container behind Podman's bridge NAT. Set it with:
+## First deployment
 
 ```shell
-aws ec2 modify-instance-metadata-options \
-  --instance-id <instance-id> \
-  --http-tokens required \
-  --http-put-response-hop-limit 2
+./prerequisites.sh
+./stackctl.sh start
 ```
 
-### litellm_service/config.yaml
+`prerequisites.sh` performs the initial pinned-image build. Normal starts and
+boots do not rebuild images.
 
-Defines available models mapped to Bedrock cross-region inference profiles (`us.anthropic.*`). Uses the `bedrock/` (Converse API) prefix — the modern path that supports native streaming.
+## Change matrix
 
-| Alias | Bedrock profile |
-|-------|----------------|
-| `claude-sonnet-5` | `us.anthropic.claude-sonnet-5` |
-| `claude-opus-4-8` | `us.anthropic.claude-opus-4-8` |
-| `claude-sonnet-4-6` | `us.anthropic.claude-sonnet-4-6` |
-| `claude-haiku-4-5` | `us.anthropic.claude-haiku-4-5-20251001-v1:0` |
-| `claude-3-5-sonnet`, `claude-3-5-sonnet-v2`, `anthropic.claude-3-5-sonnet` | → sonnet-4-6 (legacy aliases) |
-| `claude-3-5-haiku` | → haiku-4-5 (legacy alias) |
+| Change | Command | Effect |
+|---|---|---|
+| Models, prices, capabilities | `./stackctl.sh models` | Live DB reconciliation; no restart |
+| Organization/team grants | `./stackctl.sh access` | Live DB reconciliation; no restart |
+| USAI token, AWS provider environment, Codex worker/auth config | `./stackctl.sh providers` | Recreates proxy/Codex workers; no image build and no `down` |
+| `.env` or infrastructure-only `config.yaml` | `./stackctl.sh reload` | Recreates proxy/Codex workers; no image build and no `down` |
+| `HOST_IP` or TLS certificate inputs | `./stackctl.sh tls` | Recreates only nginx |
+| Dockerfile, source patch, nginx files, or image digest | `./stackctl.sh image` | Builds and recreates the stack |
+| Ordinary boot/start | `./stackctl.sh start` | Starts existing containers/images and reconciles live state |
 
-Prompt caching is enabled via `cache_control_injection_points` on both `user` and `system` locations.
+The nginx self-signed certificate is persisted in `nginx_certs/`. The nginx
+entrypoint reuses it when the certificate and RSA key are valid, match
+`HOST_IP`, and have more than 30 days remaining. It regenerates the pair only
+when either file is missing, invalid, mismatched, changed to a different IP,
+or near expiry.
 
-### nginx_service/nginx.conf
+Container environment is fixed when a process starts, so an edited `.env`
+cannot be hot-reloaded into an existing container. Recreation is required, but
+deleting the stack and rebuilding images is not. PostgreSQL is not recreated by
+`reload`/`providers`.
 
-- HTTP (80) redirects to HTTPS (443)
-- TLS 1.2/1.3 with strong ciphers; self-signed cert generated at image build time
-- Proxies to `litellm-proxy:4000` over the `internal_net` bridge
-- Proxy buffering disabled for real-time token streaming
-- 600s read timeout for long-running code generation
-- 50MB max body for large context windows
+`stackctl models` fingerprints the rendered provider topology. If an edit also
+changes environment mappings or Codex worker configuration, it refuses the
+live-only path and requires `stackctl providers` first.
 
-## Deployment
+Do not casually change `POSTGRES_PASSWORD`, `DATABASE_URL`, or
+`LITELLM_SALT_KEY`. Provider-token changes are safe with `providers`; database
+credential migration is a separate administrative operation. The salt is
+generated once and is required to decrypt provider values stored in the DB.
 
-```shell
-# 1. Run prerequisites (creates volumes, network, and .env)
-chmod +x prerequisites.sh && ./prerequisites.sh
+## Multiple broker accounts
 
-# 2. Build and start the stack
-podman-compose -f compose-litellm.yaml build
-podman-compose -f compose-litellm.yaml up -d
-```
+Add another object to `accounts` with a distinct `id`. For example, a second
+USAI account uses another environment reference:
 
-The stack auto-starts on boot via `litellm-stack.service` (installed by `prerequisites.sh`).
-
-For pulling updates and redeploying on an already-running VM, see `REDEPLOY.md`.
-
-## User Key Management
-
-All scripts read `LITELLM_MASTER_KEY` from `.env` automatically.
-
-**Create a user key:**
-```shell
-./create-ai-user.sh -u dev_jdoe -b 50.00 -d 30
-./create-ai-user.sh -u senior_dev -b 200.00 -d 30 -r 60 -t 80000
-```
-
-**Check a user's spend and limits:**
-```shell
-./check-ai-user.sh dev_jdoe
-```
-
-**Revoke a key:**
-```shell
-./revoke-ai-user.sh dev_jdoe
-```
-
-## Client Configuration
-
-### Claude Code CLI
-```shell
-export ANTHROPIC_BASE_URL="https://your-rhel-box-ip"
-export ANTHROPIC_API_KEY="sk-generated-user-token"
-```
-
-### VS Code / IDE Extensions
-- **Provider**: OpenAI-Compatible
-- **Base URL**: `https://your-rhel-box-ip/v1`
-- **API Key**: `sk-generated-user-token`
-
-### Claude Desktop
 ```json
 {
-  "mcpServers": {},
-  "inference": {
-    "provider": "openai-compatible",
-    "baseURL": "https://your-rhel-box-ip/v1",
-    "apiKey": "sk-generated-user-token"
-  }
+  "broker": "usai",
+  "id": "program-b",
+  "enabled": true,
+  "api_base": "https://api.dot.usai.gov/api/v1",
+  "api_key_env": "DOT_USAI_PROGRAM_B_API_KEY",
+  "models": [
+    {"route": "gpt-5.4", "upstream": "gpt_5_4_default_v2"}
+  ]
 }
 ```
 
-## Boot Persistence (systemd)
-
-The stack is managed by `/etc/systemd/system/litellm-stack.service`, installed and enabled by `prerequisites.sh`. It calls `gen-env.sh` at startup before launching the compose stack, ensuring `.env` is always fresh.
+Put `DOT_USAI_PROGRAM_B_API_KEY=...` in `.env`, then run:
 
 ```shell
-# Manual control
-sudo systemctl start litellm-stack.service
-sudo systemctl stop litellm-stack.service
-sudo systemctl status litellm-stack.service
-
-# Logs via journald
-journalctl -u litellm-stack.service -f
+./stackctl.sh reload
 ```
 
-## Volume Layout
+For Bedrock, add another Bedrock account and set `aws_role_name` on it. Prefer
+instance/assumed roles to static AWS keys. If a broker account cannot use role
+assumption, the optional `aws_access_key_id_env`,
+`aws_secret_access_key_env`, and `aws_session_token_env` fields reference
+separate `.env` values; they never contain the values themselves. The account
+ID remains part of every route, so access and spend attribution cannot silently
+cross accounts.
 
-All persistent data lives under `~/Build/Volumes/`:
+### Codex accounts
 
-- `${VOLUMES}/litellm_pgvol/data/` — PostgreSQL database files (user keys, budgets, usage records)
+LiteLLM's ChatGPT authenticator uses one process-global auth location. Each
+Codex login therefore gets its own internal worker container and writable auth
+directory. The whole host `~/.codex` directory is not mounted.
 
-## Network
+1. Add/enable a `codex` account in `broker-registry.json`.
+2. Import only the required credentials into its volume:
 
-All three services — `litellm-proxy`, `litellm-db`, and `litellm-nginx` — share the `internal_net` bridge and reach each other by container DNS name (`litellm-db:5432`, `litellm-proxy:4000`). None run with `network_mode: host`. `litellm-db` additionally exposes `127.0.0.1:5432` for host-local tooling; `litellm-proxy` reaches the EC2 IMDS through the bridge's NAT hop (see AWS Authentication above for the required `HttpPutResponseHopLimit` setting).
+   ```shell
+   ./brokerctl.py import-codex-auth primary --source ~/.codex/auth.json
+   ```
 
-`internal_net` is created once by `prerequisites.sh`:
+3. Render/recreate the provider processes and apply the routes:
+
+   ```shell
+   ./stackctl.sh reload
+   ```
+
+The importer converts Codex's nested token structure to the flattened format
+expected by LiteLLM, writes it atomically with mode `0600`, and never prints
+token values. The worker owns a copy because refresh can update the auth file.
+Codex access tokens are short-lived; continued operation depends on the refresh
+credential remaining valid. Revocation, policy, logout, or account changes can
+end the session earlier, so there is no safe fixed lifetime to assume.
+
+Codex subscription traffic does not expose token-priced API billing through
+this integration. Codex routes are explicitly marked
+`subscription-cost-not-reported`; the gateway does not invent dollar costs.
+
+## Organizations, teams, and multiple client tokens
+
+Organizations and teams contain route allowlists. Wildcards are expanded by
+`brokerctl.py` to the current explicit routes before LiteLLM receives them:
+
+```json
+{
+  "organizations": [
+    {
+      "id": "research-org",
+      "alias": "Research",
+      "models": ["bedrock/instance-role/*", "usai/primary/*"]
+    }
+  ],
+  "teams": [
+    {
+      "id": "red-team",
+      "alias": "Red Team",
+      "organization_id": "research-org",
+      "models": ["bedrock/instance-role/claude-sonnet-5", "usai/primary/gpt-5.4"]
+    }
+  ]
+}
+```
+
+Apply access changes live:
 
 ```shell
-podman network create internal_net
+./stackctl.sh access
 ```
 
-## Rootless Podman
+LiteLLM documents parts of organization-level access control as Premium. The
+registry and API reconciliation are implemented here, but the installed
+license ultimately determines which organization features LiteLLM will accept;
+`brokerctl` surfaces that API error instead of weakening the policy to a team-
+only fallback.
 
-The stack runs as `$USER` (UID 1118) with no root privileges. Two system settings are required and applied automatically by `prerequisites.sh`:
-
-**1. Unprivileged port binding (ports 80 and 443)**
-
-By default RHEL 9 only allows processes owned by root to bind ports below 1024. Lower the threshold to 80:
+Create any number of client tokens for the same team by running the command
+with different aliases. Each generated key uses `models: ["all-team-models"]`,
+so model authority remains on the team rather than being copied into the key:
 
 ```shell
-echo "net.ipv4.ip_unprivileged_port_start = 80" | sudo tee /etc/sysctl.d/99-podman-rootless.conf
-sudo sysctl --system
+./create-ai-user.sh -u red-ci -T red-team -b 50 -d 30
+./create-ai-user.sh -u red-developer-1 -T red-team -b 25 -d 30
 ```
 
-**2. Linger (containers survive logout / persist across reboots)**
+Existing unrestricted keys are not automatically made safe by creating teams.
+Audit, update, or revoke them before treating team allowlists as an enforcement
+boundary. The master key remains an administrator credential with full access.
 
-Without linger, the user's systemd session — and all containers — are killed when the last login session ends. Enable it once:
+## Model discovery and costs
+
+USAI's current catalog can be compared with an account without publishing new
+routes:
 
 ```shell
-sudo loginctl enable-linger $USER
+./brokerctl.py discover-usai primary
 ```
 
-**3. XDG_RUNTIME_DIR in the systemd unit**
+Discovery deliberately does not auto-add or auto-grant models. A newly exposed
+upstream model may have unknown price, capability, policy, or entitlement
+semantics. Review it, add it to the registry, assign a price/capability record,
+then run `stackctl models`. This keeps updates easy without turning upstream
+catalog drift into an access-control change.
 
-When a system-level unit (`/etc/systemd/system/`) runs as a non-root user, the rootless podman socket path (`/run/user/1118`) is not set in the environment automatically. The unit sets it explicitly:
+USAI routes use the explicit registry prices. Bedrock uses LiteLLM's pricing
+catalog unless a registry model overrides it. Codex subscription routes report
+usage but not fabricated marginal cost.
 
-```ini
-Environment=XDG_RUNTIME_DIR=/run/user/1118
-Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1118/bus
-```
+## Upgrade-patch safety
 
-These three settings together allow the rootless stack to bind ports 80/443, outlive interactive sessions, and be managed by the system service manager.
-
-## Firewall
-
-The host runs firewalld in the `drop` zone (default-deny). Ports 80 and 443 must be open for clients to reach nginx. Port 4000 (litellm-proxy) and 5432 (postgres) do **not** need firewall rules — both are only reached container-to-container over the `internal_net` bridge, and 5432 is additionally bound to `127.0.0.1` for host-local tooling.
+The local Anthropic streaming patch is applied at image build time. Its test
+suite verifies the exact reviewed upstream block, syntax, idempotence, and
+fail-closed behavior. If a new LiteLLM digest changes that block, the image
+build stops and requires review instead of silently applying a stale patch.
 
 ```shell
-sudo firewall-cmd --permanent --add-port=80/tcp --add-port=443/tcp
-sudo firewall-cmd --reload
+python3 -m unittest -v litellm_service/test_apply_patch.py
+./stackctl.sh image
 ```
 
-## Egress Filtering
-
-`harden-egress.sh` restricts outbound traffic from the `litellm-proxy` container's bridge subnet (`internal_net`) to only DNS, the EC2 IMDS, and Amazon Bedrock — closing off a compromised dependency's ability to call home to an external C2 server. It's scoped entirely by source address (the bridge subnet), so it never touches the existing firewalld zone or any other service's rules on this host.
-
-Not run automatically by `prerequisites.sh` — the Bedrock destination is an open question for the AWS architects (VPC interface endpoint vs. public IP-range allow-list; see `SecurityRemediationPlan.md`). Run it manually once that's decided:
+## Useful commands
 
 ```shell
-# Option A — VPC interface endpoint (preferred)
-BEDROCK_ENDPOINT_CIDR=10.0.5.10/32 ./harden-egress.sh
-
-# Option B — public Bedrock IP ranges (fallback, review periodically).
-# Resolve current ranges from https://ip-ranges.amazonaws.com/ip-ranges.json
-# (filter service=="BEDROCK", region==your region) — do not guess these.
-BEDROCK_PUBLIC_CIDRS="<cidr1> <cidr2> ..." ./harden-egress.sh
+./brokerctl.py validate
+./brokerctl.py routes
+./stackctl.sh status
+podman logs --tail 100 litellm-proxy
+curl -sk https://localhost/v1/models \
+  -H "Authorization: Bearer $(sed -n 's/^LITELLM_MASTER_KEY=//p' .env)"
 ```
 
-## Log Rotation
+The systemd unit is installed by `prerequisites.sh`. It starts existing images
+through `stackctl start` and stops containers without deleting them.
 
-Container logs are capped at 50MB per container via `/etc/containers/containers.conf`. System journal limits are set in `/etc/systemd/journald.conf`:
-
-| Setting | Value |
-|---------|-------|
-| `SystemMaxUse` | 2G |
-| `SystemMaxFileSize` | 100M |
-| `MaxRetentionSec` | 14 days |
-
-To view live proxy logs:
-```shell
-journalctl -u litellm-stack.service -f
-podman logs -f litellm-proxy
-```
+If `harden-egress.sh` is used, supply reviewed CIDRs for every enabled broker.
+The script now fails before changing firewalld when USAI or Codex is enabled
+without its corresponding allowlist. Public broker/CDN addresses can change;
+a controlled egress proxy or private endpoint is safer than a one-time DNS
+snapshot.
