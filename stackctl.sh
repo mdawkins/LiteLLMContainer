@@ -14,8 +14,8 @@ Usage: ./stackctl.sh COMMAND
   start        Start without rebuilding, then reconcile models and access live
   models       Reconcile DB-backed routes live; no container restart
   access       Reconcile organizations/teams live; no container restart
-  providers    Reload provider .env and worker config by recreating only proxy/workers
-  reload       Alias for providers; reload .env/config and recreate proxy/workers
+  providers    Reload provider .env and worker config by recreating nginx/proxy/workers
+  reload       Alias for providers; reload .env/config and recreate nginx/proxy/workers
   tls          Recreate only nginx after HOST_IP/TLS configuration changes
   restart      Restart proxy/workers without rebuilding (does not reload .env)
   image        Rebuild changed local images and recreate the stack
@@ -135,7 +135,13 @@ reload_apps() {
     render
     preflight
     read -r -a worker_array <<<"$(workers)"
-    "${COMPOSE[@]}" up -d --no-build --force-recreate litellm-proxy "${worker_array[@]}"
+    # nginx depends on litellm-proxy. Include it in the recreate set so
+    # podman-compose removes dependents before replacing the proxy; selecting
+    # only the proxy leaves the old nginx container holding a dependency and
+    # causes Podman to reuse the stale proxy instead of applying config.yaml.
+    # --no-deps keeps the already-running PostgreSQL container out of this
+    # application reload; start is the command to recover a stopped database.
+    "${COMPOSE[@]}" up -d --no-build --no-deps --force-recreate litellm-proxy "${worker_array[@]}" litellm-nginx
     wait_for_proxy
     apply_models
     apply_access

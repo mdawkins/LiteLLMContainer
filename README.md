@@ -55,7 +55,7 @@ boots do not rebuild images.
 | Models, prices, capabilities | `./stackctl.sh models` | Live DB reconciliation; no restart |
 | Organization/team grants | `./stackctl.sh access` | Live DB reconciliation; no restart |
 | USAI token, AWS provider environment, Codex worker/auth config | `./stackctl.sh providers` | Recreates proxy/Codex workers; no image build and no `down` |
-| `.env` or infrastructure-only `config.yaml` | `./stackctl.sh reload` | Recreates proxy/Codex workers; no image build and no `down` |
+| `.env` or infrastructure-only `config.yaml` | `./stackctl.sh reload` | Recreates nginx, proxy, and Codex workers; no image build and no `down` |
 | `HOST_IP` or TLS certificate inputs | `./stackctl.sh tls` | Recreates only nginx |
 | Dockerfile, source patch, nginx files, or image digest | `./stackctl.sh image` | Builds and recreates the stack |
 | Ordinary boot/start | `./stackctl.sh start` | Starts existing containers/images and reconciles live state |
@@ -70,7 +70,8 @@ build time or generate certificates inside the container.
 Container environment is fixed when a process starts, so an edited `.env`
 cannot be hot-reloaded into an existing container. Recreation is required, but
 deleting the stack and rebuilding images is not. PostgreSQL is not recreated by
-`reload`/`providers`.
+`reload`/`providers`; nginx is recreated as part of the dependency-safe app
+reload.
 
 `stackctl models` fingerprints the rendered provider topology. If an edit also
 changes environment mappings or Codex worker configuration, it refuses the

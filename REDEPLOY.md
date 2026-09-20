@@ -31,9 +31,10 @@ before any production change and keep the volume. A future PostgreSQL major
 upgrade must use a separate migration plan.
 
 `reload` is the safe no-build path for `.env` or `litellm_service/config.yaml`
-changes. It re-renders the generated broker compose file, recreates the
-LiteLLM proxy and any Codex workers, waits for health, and reapplies managed
-models and access grants. `providers` remains an equivalent compatibility alias.
+changes. It re-renders the generated broker compose file, recreates nginx, the
+LiteLLM proxy, and any Codex workers in dependency order, waits for health, and
+reapplies managed models and access grants. `providers` remains an equivalent
+compatibility alias.
 
 If deployment helpers or the systemd unit changed, rerun the idempotent setup
 before selecting the operation:
