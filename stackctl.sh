@@ -135,13 +135,19 @@ reload_apps() {
     render
     preflight
     read -r -a worker_array <<<"$(workers)"
-    # nginx depends on litellm-proxy. Include it in the recreate set so
-    # podman-compose removes dependents before replacing the proxy; selecting
-    # only the proxy leaves the old nginx container holding a dependency and
-    # causes Podman to reuse the stale proxy instead of applying config.yaml.
-    # --no-deps keeps the already-running PostgreSQL container out of this
-    # application reload; start is the command to recover a stopped database.
-    "${COMPOSE[@]}" up -d --no-build --no-deps --force-recreate litellm-proxy "${worker_array[@]}" litellm-nginx
+    # podman-compose 1.0.6 can tear down dependencies during a selective
+    # force-recreate even when --no-deps is supplied. Stop/remove only the
+    # application containers ourselves, in dependency order, then let compose
+    # create the missing containers without recreating PostgreSQL.
+    local service
+    local -a app_services=(litellm-nginx litellm-proxy "${worker_array[@]}")
+    for service in "${app_services[@]}"; do
+        podman stop -t 10 "${service}" >/dev/null 2>&1 || true
+    done
+    for service in "${app_services[@]}"; do
+        podman rm "${service}" >/dev/null 2>&1 || true
+    done
+    "${COMPOSE[@]}" up -d --no-build --no-recreate "${app_services[@]}"
     wait_for_proxy
     apply_models
     apply_access
