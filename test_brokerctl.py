@@ -62,6 +62,17 @@ class BrokerRegistryTest(unittest.TestCase):
         with self.assertRaises(brokerctl.RegistryError):
             brokerctl.validate(registry)
 
+    def test_pricing_html_tables_are_extracted_without_executing_scripts(self):
+        html = """
+        <html><script>window.secret = 'must not execute';</script>
+        <table><tr><th>Model</th><th>Input price</th></tr>
+        <tr><td>gpt-5.4</td><td>$2.50 / 1M</td></tr></table></html>
+        """
+        tables = brokerctl.parse_html_tables(html)
+        self.assertEqual(len(tables), 1)
+        self.assertEqual(tables[0]["headers"], ["Model", "Input price"])
+        self.assertEqual(tables[0]["rows"], [["gpt-5.4", "$2.50 / 1M"]])
+
     def test_bedrock_static_credentials_are_references_and_require_a_pair(self):
         registry = json.loads(json.dumps(self.registry))
         account = next(row for row in registry["accounts"] if row["broker"] == "bedrock")

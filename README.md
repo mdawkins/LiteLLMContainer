@@ -204,6 +204,30 @@ routes:
 ./brokerctl.py discover-usai primary
 ```
 
+For a durable snapshot, use `sync-usai`. It reads the current rotating key
+from `.env`, saves the complete `/models` response under `.generated/`, and
+never prints or persists the key:
+
+```shell
+./brokerctl.py sync-usai primary
+```
+
+USAI pricing is currently presented in a PIV/SSO console rather than a
+machine-readable export. From a workstation browser, save the pricing page as
+HTML, transfer only that HTML snapshot through the approved channel, and run:
+
+```shell
+./brokerctl.py sync-usai primary --pricing-html /secure/path/usai-pricing.html
+```
+
+The command preserves the HTML at
+`.generated/usai/primary/pricing.html` and extracts ordinary HTML tables to
+`pricing-candidates.json` for review. It does not scrape through SSO, guess
+prices from display text, alter the registry, grant new model access, or apply
+pricing automatically. This is intentional: the console page may contain
+account-specific entitlements or presentation changes, and a pricing change
+must be reviewed before it affects cost accounting.
+
 Discovery deliberately does not auto-add or auto-grant models. A newly exposed
 upstream model may have unknown price, capability, policy, or entitlement
 semantics. Review it, add it to the registry, assign a price/capability record,

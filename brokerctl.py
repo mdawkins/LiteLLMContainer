@@ -20,6 +20,8 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
@@ -283,6 +285,126 @@ def load_registry(path: Path) -> dict[str, Any]:
 def canonical_hash(payload: dict[str, Any]) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+class HtmlTableParser(HTMLParser):
+    """Extract simple HTML tables without executing page JavaScript."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.tables: list[list[list[str]]] = []
+        self._table: list[list[str]] | None = None
+        self._row: list[str] | None = None
+        self._cell: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag == "table" and self._table is None:
+            self._table = []
+        elif tag == "tr" and self._table is not None:
+            self._row = []
+        elif tag in {"th", "td"} and self._row is not None:
+            self._cell = []
+
+    def handle_data(self, data: str) -> None:
+        if self._cell is not None:
+            self._cell.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in {"th", "td"} and self._cell is not None and self._row is not None:
+            value = re.sub(r"\\s+", " ", "".join(self._cell)).strip()
+            self._row.append(value)
+            self._cell = None
+        elif tag == "tr" and self._row is not None and self._table is not None:
+            if any(self._row):
+                self._table.append(self._row)
+            self._row = None
+        elif tag == "table" and self._table is not None:
+            if self._table:
+                self.tables.append(self._table)
+            self._table = None
+
+
+def parse_html_tables(content: str) -> list[dict[str, Any]]:
+    parser = HtmlTableParser()
+    parser.feed(content)
+    result: list[dict[str, Any]] = []
+    for table_number, rows in enumerate(parser.tables, 1):
+        headers = rows[0]
+        result.append(
+            {
+                "table": table_number,
+                "headers": headers,
+                "rows": rows[1:],
+            }
+        )
+    return result
+
+
+def write_private_json(path: Path, value: Any) -> None:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, path)
+
+
+def sync_usai(
+    registry: dict[str, Any],
+    env: dict[str, str],
+    account_id: str,
+    insecure: bool,
+    pricing_html: Path | None,
+    output: Path | None,
+) -> None:
+    matches = [a for a in registry.get("accounts", []) if a.get("broker") == "usai" and a.get("id") == account_id]
+    if not matches:
+        raise RegistryError(f"unknown USAI account {account_id!r}")
+    account = matches[0]
+    key_name = account["api_key_env"]
+    token = os.environ.get(key_name) or env.get(key_name)
+    if not token:
+        raise RegistryError(f"{key_name} is not set")
+
+    api = Api(account["api_base"], token, insecure=insecure)
+    response = api.request("GET", "/models")
+    rows = extract_list(response, "models")
+    configured = {model["upstream"] for model in account["models"]}
+    discovered = [str(row.get("id")) for row in rows if row.get("id")]
+    destination = output or (GENERATED / "usai" / account_id / "models.json")
+    write_private_json(
+        destination,
+        {
+            "retrieved_at": datetime.now(timezone.utc).isoformat(),
+            "broker": "usai",
+            "account": account_id,
+            "api_base": account["api_base"],
+            "models": response,
+        },
+    )
+    print(f"[brokerctl] saved USAI catalog ({len(discovered)} model(s)) to {destination}")
+    print(f"[brokerctl] known={sum(model_id in configured for model_id in discovered)} new={sum(model_id not in configured for model_id in discovered)}")
+
+    if pricing_html:
+        try:
+            html_content = pricing_html.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            raise RegistryError(f"cannot read pricing HTML {pricing_html}: {exc}") from exc
+        pricing_destination = destination.parent / "pricing.html"
+        pricing_destination.write_text(html_content, encoding="utf-8")
+        os.chmod(pricing_destination, 0o600)
+        candidates = destination.parent / "pricing-candidates.json"
+        write_private_json(
+            candidates,
+            {
+                "source": str(pricing_html),
+                "saved_at": datetime.now(timezone.utc).isoformat(),
+                "tables": parse_html_tables(html_content),
+            },
+        )
+        print(f"[brokerctl] saved pricing HTML to {pricing_destination}")
+        print(f"[brokerctl] extracted pricing table candidates to {candidates}; review before applying")
 
 
 def desired_model(account: dict[str, Any], model: dict[str, Any]) -> dict[str, Any]:
@@ -693,6 +815,19 @@ def parser() -> argparse.ArgumentParser:
     discover = sub.add_parser("discover-usai")
     discover.add_argument("account")
     discover.add_argument("--insecure", action="store_true")
+    sync = sub.add_parser("sync-usai")
+    sync.add_argument("account")
+    sync.add_argument("--insecure", action="store_true")
+    sync.add_argument(
+        "--pricing-html",
+        type=Path,
+        help="HTML saved from the USAI console pricing page (SSO/PIV is performed interactively)",
+    )
+    sync.add_argument(
+        "--output",
+        type=Path,
+        help="catalog JSON destination (default: .generated/usai/<account>/models.json)",
+    )
     return result
 
 
@@ -722,6 +857,8 @@ def main() -> int:
             import_codex_auth(registry, env, args.account, args.source)
         elif args.command == "discover-usai":
             discover_usai(registry, env, args.account, args.insecure)
+        elif args.command == "sync-usai":
+            sync_usai(registry, env, args.account, args.insecure, args.pricing_html, args.output)
         return 0
     except (RegistryError, RuntimeError) as exc:
         print(f"brokerctl: {exc}", file=sys.stderr)
