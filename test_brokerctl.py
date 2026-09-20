@@ -73,6 +73,21 @@ class BrokerRegistryTest(unittest.TestCase):
         self.assertEqual(tables[0]["headers"], ["Model", "Input price"])
         self.assertEqual(tables[0]["rows"], [["gpt-5.4", "$2.50 / 1M"]])
 
+    def test_svelte_embedded_pricing_records_are_extracted(self):
+        html = """
+        <script>resolve(1, () => [{models:[
+          {"Model Name":"GPT 5.4",Status:"API, Chat",Vendor:"OpenAI",
+           "Input Cost":"$5.00 /1M","Output Cost":"$22.50 /1M"}
+        ]}])</script>
+        """
+        records = brokerctl.extract_embedded_model_records(html)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["Model Name"], "GPT 5.4")
+        self.assertEqual(records[0]["Input Cost"], "$5.00 /1M")
+        self.assertEqual(records[0]["Status"], "API, Chat")
+        self.assertEqual(records[0]["input_cost_per_token"], 0.000005)
+        self.assertEqual(records[0]["output_cost_per_token"], 0.0000225)
+
     def test_bedrock_static_credentials_are_references_and_require_a_pair(self):
         registry = json.loads(json.dumps(self.registry))
         account = next(row for row in registry["accounts"] if row["broker"] == "bedrock")

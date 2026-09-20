@@ -221,12 +221,13 @@ HTML, transfer only that HTML snapshot through the approved channel, and run:
 ```
 
 The command preserves the HTML at
-`.generated/usai/primary/pricing.html` and extracts ordinary HTML tables to
-`pricing-candidates.json` for review. It does not scrape through SSO, guess
-prices from display text, alter the registry, grant new model access, or apply
-pricing automatically. This is intentional: the console page may contain
-account-specific entitlements or presentation changes, and a pricing change
-must be reviewed before it affects cost accounting.
+`.generated/usai/primary/pricing.html` and extracts ordinary HTML tables plus
+the current embedded SvelteKit model payload to `pricing-candidates.json` for
+review. Displayed prices such as `$5.00 /1M` are also normalized to LiteLLM's
+per-token units. It does not scrape through SSO, alter the registry, grant new
+model access, or apply pricing automatically. This is intentional: the console
+page may contain account-specific entitlements or presentation changes, and a
+pricing change must be reviewed before it affects cost accounting.
 
 Discovery deliberately does not auto-add or auto-grant models. A newly exposed
 upstream model may have unknown price, capability, policy, or entitlement

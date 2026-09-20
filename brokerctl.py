@@ -342,6 +342,42 @@ def parse_html_tables(content: str) -> list[dict[str, Any]]:
     return result
 
 
+def parse_price_per_token(value: str) -> float | None:
+    match = re.search(r"\$?\s*([0-9]+(?:\.[0-9]+)?)\s*/\s*1\s*M", value, re.IGNORECASE)
+    if not match:
+        return None
+    return float(match.group(1)) / 1_000_000
+
+
+def extract_embedded_model_records(content: str) -> list[dict[str, Any]]:
+    """Extract USAI model records embedded in the rendered SvelteKit payload.
+
+    The console currently serializes records as JavaScript object literals. We
+    intentionally extract only objects that contain pricing fields, rather
+    than evaluating the page or retaining its user/session data.
+    """
+    object_pattern = re.compile(r"\{(?=[^{}]*\"Input Cost\"\s*:\s*\")[^{}]*\}")
+    field_pattern = re.compile(
+        r"(?:\"([^\"]+)\"|([A-Za-z][A-Za-z0-9_]*))\s*:\s*\"((?:\\.|[^\"\\])*)\""
+    )
+    records: list[dict[str, Any]] = []
+    for match in object_pattern.finditer(content):
+        record: dict[str, str] = {}
+        for field in field_pattern.finditer(match.group(0)):
+            key = field.group(1) or field.group(2)
+            raw_value = field.group(3)
+            try:
+                value = json.loads(f'"{raw_value}"')
+            except json.JSONDecodeError:
+                value = raw_value
+            record[key] = value
+        if "Model Name" in record and "Input Cost" in record and "Output Cost" in record:
+            record["input_cost_per_token"] = parse_price_per_token(record["Input Cost"])
+            record["output_cost_per_token"] = parse_price_per_token(record["Output Cost"])
+            records.append(record)
+    return records
+
+
 def write_private_json(path: Path, value: Any) -> None:
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
@@ -395,16 +431,28 @@ def sync_usai(
         pricing_destination.write_text(html_content, encoding="utf-8")
         os.chmod(pricing_destination, 0o600)
         candidates = destination.parent / "pricing-candidates.json"
+        tables = parse_html_tables(html_content)
+        embedded_models = extract_embedded_model_records(html_content)
         write_private_json(
             candidates,
             {
                 "source": str(pricing_html),
                 "saved_at": datetime.now(timezone.utc).isoformat(),
-                "tables": parse_html_tables(html_content),
+                "tables": tables,
+                "embedded_models": embedded_models,
             },
         )
         print(f"[brokerctl] saved pricing HTML to {pricing_destination}")
-        print(f"[brokerctl] extracted pricing table candidates to {candidates}; review before applying")
+        print(
+            f"[brokerctl] extracted {len(tables)} HTML table(s) and "
+            f"{len(embedded_models)} embedded model record(s) to {candidates}; review before applying"
+        )
+        if not tables and not embedded_models:
+            print(
+                "[brokerctl] warning: no pricing records were found; "
+                "confirm the saved page was fully rendered after SSO",
+                file=sys.stderr,
+            )
 
 
 def desired_model(account: dict[str, Any], model: dict[str, Any]) -> dict[str, Any]:
