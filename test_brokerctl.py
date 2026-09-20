@@ -28,10 +28,21 @@ class BrokerRegistryTest(unittest.TestCase):
 
     def test_routes_are_unique_and_broker_qualified(self):
         routes = brokerctl.route_names(self.registry)
-        self.assertEqual(len(routes), 14)
+        self.assertEqual(len(routes), len(brokerctl.desired_models(self.registry)))
         self.assertEqual(len(routes), len(set(routes)))
         self.assertTrue(all(route.count("/") == 2 for route in routes))
         self.assertFalse(brokerctl.find_forbidden(self.registry))
+
+    def test_codex_is_enabled_with_all_gpt56_models(self):
+        account = next(row for row in self.registry["accounts"] if row["broker"] == "codex")
+        self.assertTrue(account["enabled"])
+        self.assertTrue(
+            {
+                "codex/primary/gpt-5.6-luna",
+                "codex/primary/gpt-5.6-sol",
+                "codex/primary/gpt-5.6-terra",
+            }.issubset(set(brokerctl.route_names(self.registry)))
+        )
 
     def test_model_payloads_reference_secrets_instead_of_values(self):
         payloads = brokerctl.desired_models(self.registry)
@@ -135,7 +146,7 @@ class BrokerRegistryTest(unittest.TestCase):
         api = FakeApi()
         brokerctl.apply_models(api, self.registry, apply=True, prune=True)
         writes = [call for call in api.calls if call[0] == "POST"]
-        self.assertEqual(len(writes), 14)
+        self.assertEqual(len(writes), len(brokerctl.desired_models(self.registry)))
         self.assertTrue(all(call[1] == "/model/new" for call in writes))
 
     def test_model_reconciliation_prunes_only_managed_rows(self):

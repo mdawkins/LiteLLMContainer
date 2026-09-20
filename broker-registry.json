@@ -90,10 +90,13 @@
     {
       "broker": "codex",
       "id": "primary",
-      "enabled": false,
+      "enabled": true,
       "auth_dir": "${VOLUMES}/litellm_codex/primary",
       "worker_key_env": "CODEX_PRIMARY_WORKER_KEY",
       "models": [
+        {"route": "gpt-5.6-sol", "upstream": "gpt-5.6-sol"},
+        {"route": "gpt-5.6-terra", "upstream": "gpt-5.6-terra"},
+        {"route": "gpt-5.6-luna", "upstream": "gpt-5.6-luna"},
         {"route": "gpt-5.4", "upstream": "gpt-5.4"},
         {"route": "gpt-5.4-pro", "upstream": "gpt-5.4-pro"},
         {"route": "gpt-5.3-codex", "upstream": "gpt-5.3-codex"},

@@ -15,9 +15,11 @@ usai/primary/gpt-5.4
 codex/primary/gpt-5.3-codex
 ```
 
-There are no cross-broker fallbacks, router aliases, or duplicate deployments
-behind one name. A request either reaches the broker named in its route or
-fails visibly.
+There are no cross-broker fallbacks or duplicate deployments behind one
+canonical route. A request either reaches the broker named in its route or
+fails visibly. A small, explicit legacy Claude alias map is retained for
+existing Claude Code clients; each alias resolves to one broker-qualified
+canonical route before routing and access checks.
 
 ## Configuration model
 
@@ -29,7 +31,8 @@ Codex auth volume.
 `litellm_service/config.yaml` contains only stable proxy settings. Models are
 stored in PostgreSQL (`store_model_in_db: true`) and reconciled through
 LiteLLM's model-management API, so model edits take effect without restarting
-the proxy.
+the proxy. It also contains the three legacy Claude Code aliases:
+`claude_5_sonnet`, `claude_4_5_haiku`, and `claude_5_opus`.
 
 `brokerctl.py` validates the registry before rendering or applying it. It
 rejects fallback keys, duplicate public routes, unknown model grants, and team

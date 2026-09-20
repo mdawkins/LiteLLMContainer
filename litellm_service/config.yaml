@@ -6,6 +6,12 @@ litellm_settings:
   enable_prompt_caching: true
   drop_params: true
   modify_params: true
+  # Backward-compatible Claude Code model names. These resolve to the
+  # broker-qualified canonical routes before routing and access checks.
+  model_alias_map:
+    claude_5_sonnet: usai/primary/claude-5-sonnet
+    claude_4_5_haiku: usai/primary/claude-4.5-haiku
+    claude_5_opus: usai/primary/claude-5-opus
   additional_drop_params:
     - "tools[*].input_examples"
     - "tools[*].defer_loading"
