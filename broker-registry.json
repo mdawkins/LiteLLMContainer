@@ -9,70 +9,244 @@
       "api_key_env": "DOT_USAI_API_KEY",
       "models": [
         {
+          "route": "claude-5.5-opus",
+          "upstream": "claude_5_5_opus",
+          "pricing": {
+            "input_cost_per_token": 0.0000044,
+            "output_cost_per_token": 0.000022
+          }
+        },
+        {
+          "route": "claude-5.5-sonnet",
+          "upstream": "claude_5_5_sonnet",
+          "pricing": {
+            "input_cost_per_token": 0.0000022,
+            "output_cost_per_token": 0.000012
+          }
+        },
+        {
           "route": "claude-5-opus",
           "upstream": "claude-opus-5",
-          "capabilities": {"supports_prompt_caching": true, "supports_function_calling": true, "supports_tool_choice": true},
-          "pricing": {"input_cost_per_token": 0.000005, "output_cost_per_token": 0.000025}
+          "pricing": {
+            "input_cost_per_token": 0.0000055,
+            "output_cost_per_token": 0.0000275
+          }
         },
         {
           "route": "claude-5-sonnet",
           "upstream": "claude-sonnet-5",
-          "capabilities": {"supports_prompt_caching": true, "supports_function_calling": true, "supports_tool_choice": true},
-          "pricing": {"input_cost_per_token": 0.000002, "output_cost_per_token": 0.00001}
+          "pricing": {
+            "input_cost_per_token": 0.0000022,
+            "output_cost_per_token": 0.000011
+          }
+        },
+        {
+          "route": "claude-4.8-opus",
+          "upstream": "claude_4_8_opus",
+          "pricing": {
+            "input_cost_per_token": 0.0000055,
+            "output_cost_per_token": 0.0000275
+          }
+        },
+        {
+          "route": "claude-4.7-opus",
+          "upstream": "claude_4_7_opus",
+          "pricing": {
+            "input_cost_per_token": 0.0000055,
+            "output_cost_per_token": 0.0000275
+          }
+        },
+        {
+          "route": "claude-4.6-sonnet",
+          "upstream": "claude_4_6_sonnet",
+          "pricing": {
+            "input_cost_per_token": 0.0000033,
+            "output_cost_per_token": 0.0000165
+          }
+        },
+        {
+          "route": "claude-4.5-opus",
+          "upstream": "claude_4_5_opus",
+          "pricing": {
+            "input_cost_per_token": 0.0000055,
+            "output_cost_per_token": 0.0000275
+          }
+        },
+        {
+          "route": "claude-4.5-sonnet",
+          "upstream": "claude_4_5_sonnet",
+          "pricing": {
+            "input_cost_per_token": 0.0000033,
+            "output_cost_per_token": 0.0000165
+          }
         },
         {
           "route": "claude-4.5-haiku",
           "upstream": "claude_4_5_haiku",
-          "capabilities": {"supports_prompt_caching": true, "supports_function_calling": true, "supports_tool_choice": true},
-          "pricing": {"input_cost_per_token": 0.0000011, "output_cost_per_token": 0.0000055}
+          "pricing": {
+            "input_cost_per_token": 0.0000011,
+            "output_cost_per_token": 0.0000055
+          }
+        },
+        {
+          "route": "gpt-6-astra",
+          "upstream": "gpt-6-astra",
+          "pricing": {
+            "input_cost_per_token": 0.000022,
+            "output_cost_per_token": 0.0000825
+          }
+        },
+        {
+          "route": "gpt-6.1-sol",
+          "upstream": "gpt-6.1-sol",
+          "pricing": {
+            "input_cost_per_token": 0.0000044,
+            "output_cost_per_token": 0.0000165
+          }
+        },
+        {
+          "route": "gpt-6-sol",
+          "upstream": "gpt-6-sol",
+          "pricing": {
+            "input_cost_per_token": 0.0000044,
+            "output_cost_per_token": 0.0000165
+          }
+        },
+        {
+          "route": "gpt-6-luna",
+          "upstream": "gpt-6-luna",
+          "pricing": {
+            "input_cost_per_token": 0.00000022,
+            "output_cost_per_token": 0.00000082
+          }
+        },
+        {
+          "route": "gpt-5.6-sol",
+          "upstream": "gpt-5.6-sol-latest-guardrails-defaultv2",
+          "pricing": {
+            "input_cost_per_token": 0.0000088,
+            "output_cost_per_token": 0.000033
+          }
+        },
+        {
+          "route": "gpt-5.6-terra",
+          "upstream": "gpt-5.6-terra",
+          "pricing": {
+            "input_cost_per_token": 0.0000044,
+            "output_cost_per_token": 0.0000198
+          }
+        },
+        {
+          "route": "gpt-5.6-luna",
+          "upstream": "gpt-5.6-luna",
+          "pricing": {
+            "input_cost_per_token": 0.00000044,
+            "output_cost_per_token": 0.00000198
+          }
         },
         {
           "route": "gpt-5.5",
           "upstream": "gpt_5_5_default_v2",
-          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
-          "pricing": {"input_cost_per_token": 0.000005, "output_cost_per_token": 0.00003}
+          "pricing": {
+            "input_cost_per_token": 0.000011,
+            "output_cost_per_token": 0.0000495
+          }
         },
         {
           "route": "gpt-5.4",
           "upstream": "gpt_5_4_default_v2",
-          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
-          "pricing": {"input_cost_per_token": 0.0000025, "output_cost_per_token": 0.000015}
+          "pricing": {
+            "input_cost_per_token": 0.000006,
+            "output_cost_per_token": 0.000027
+          }
         },
         {
           "route": "gpt-5.2",
           "upstream": "gpt_5_2_default_v2",
-          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
-          "pricing": {"input_cost_per_token": 0.00000175, "output_cost_per_token": 0.000014}
+          "pricing": {
+            "input_cost_per_token": 0.0000021,
+            "output_cost_per_token": 0.0000168
+          }
         },
         {
           "route": "gemini-2.5-pro",
           "upstream": "gemini-2.5-pro",
-          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
-          "pricing": {"input_cost_per_token": 0.00000125, "output_cost_per_token": 0.00001}
+          "pricing": {
+            "input_cost_per_token": 0.0000025,
+            "output_cost_per_token": 0.000015
+          }
         },
         {
           "route": "gemini-2.5-flash",
           "upstream": "gemini-2.5-flash",
-          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
-          "pricing": {"input_cost_per_token": 3e-7, "output_cost_per_token": 0.0000025}
+          "pricing": {
+            "input_cost_per_token": 0.0000003,
+            "output_cost_per_token": 0.0000025
+          }
         },
         {
           "route": "gemini-2.5-flash-lite",
           "upstream": "gemini-2.5-flash-lite",
-          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
-          "pricing": {"input_cost_per_token": 1e-7, "output_cost_per_token": 1e-7}
+          "pricing": {
+            "input_cost_per_token": 0.0000001,
+            "output_cost_per_token": 0.0000004
+          }
+        },
+        {
+          "route": "gemini-3.8-flash",
+          "upstream": "gemini-3.8-flash",
+          "pricing": {
+            "input_cost_per_token": 0.00000083,
+            "output_cost_per_token": 0.00000413
+          }
+        },
+        {
+          "route": "gemini-3.7-flash",
+          "upstream": "gemini-3-7-flash",
+          "pricing": {
+            "input_cost_per_token": 0.00000083,
+            "output_cost_per_token": 0.00000413
+          }
+        },
+        {
+          "route": "gemini-3.5-flash",
+          "upstream": "gemini-3.5-flash",
+          "pricing": {
+            "input_cost_per_token": 0.00000165,
+            "output_cost_per_token": 0.0000099
+          }
+        },
+        {
+          "route": "grok-4.6",
+          "upstream": "grok-4.6",
+          "pricing": {
+            "input_cost_per_token": 0.0000022,
+            "output_cost_per_token": 0.0000066
+          }
+        },
+        {
+          "route": "grok-4.3",
+          "upstream": "grok-4.3",
+          "pricing": {
+            "input_cost_per_token": 0.00000138,
+            "output_cost_per_token": 0.00000275
+          }
         },
         {
           "route": "grok-4",
           "upstream": "grok_4_default_v2",
-          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
-          "pricing": {"input_cost_per_token": 0.000003, "output_cost_per_token": 0.000015}
+          "pricing": {
+            "input_cost_per_token": 0.0000033,
+            "output_cost_per_token": 0.0000165
+          }
         },
         {
           "route": "llama-4-maverick",
           "upstream": "llama_4_maverick",
-          "capabilities": {"supports_function_calling": true, "supports_tool_choice": true},
-          "pricing": {"input_cost_per_token": 2.4e-7, "output_cost_per_token": 9.7e-7}
+          "pricing": {
+            "input_cost_per_token": 0.00000024,
+            "output_cost_per_token": 0.00000097
+          }
         }
       ]
     },
@@ -90,7 +264,7 @@
     {
       "broker": "codex",
       "id": "primary",
-      "enabled": true,
+      "enabled": false,
       "auth_dir": "${VOLUMES}/litellm_codex/primary",
       "worker_key_env": "CODEX_PRIMARY_WORKER_KEY",
       "models": [

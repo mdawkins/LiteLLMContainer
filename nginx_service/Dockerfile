@@ -1,4 +1,4 @@
-FROM docker.io/library/nginx:1.31.5-alpine3.24@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3
+FROM docker.io/library/nginx:1.31.8-alpine3.24-slim@sha256:45d4ab2ffcf02e39468280840c608096a7f5f53fa2bf3b4b0c33b30d98ddbef4
 
 # TLS certificates are generated and validated by stackctl.sh on the host.
 # Keeping certificate lifecycle outside this image avoids requiring Alpine
