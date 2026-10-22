@@ -105,7 +105,7 @@ def target_path() -> str:
         litellm.__path__[0],
         "llms",
         "anthropic",
-        "experimental_pass_through",
+        "pass_through",
         "adapters",
         "streaming_iterator.py",
     )
