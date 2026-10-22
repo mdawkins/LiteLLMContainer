@@ -349,6 +349,51 @@ def parse_price_per_token(value: str) -> float | None:
     return float(match.group(1)) / 1_000_000
 
 
+def extract_models_from_tables(tables: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for table in tables:
+        headers = table.get("headers", [])
+        rows = table.get("rows", [])
+        if not headers or not rows:
+            continue
+
+        headers_lower = [h.lower().strip() for h in headers]
+        model_col = None
+        input_col = None
+        output_col = None
+
+        for i, h in enumerate(headers_lower):
+            if "model" in h:
+                model_col = i
+            elif "input" in h:
+                input_col = i
+            elif "output" in h:
+                output_col = i
+
+        if model_col is None or input_col is None or output_col is None:
+            continue
+
+        for row in rows:
+            if len(row) <= max(model_col, input_col, output_col):
+                continue
+
+            model_name = row[model_col].strip()
+            input_cost = parse_price_per_token(row[input_col])
+            output_cost = parse_price_per_token(row[output_col])
+
+            if model_name and input_cost is not None and output_cost is not None:
+                records.append({
+                    "Model Name": model_name,
+                    "Input Cost": row[input_col],
+                    "Output Cost": row[output_col],
+                    "input_cost_per_token": input_cost,
+                    "output_cost_per_token": output_cost,
+                })
+
+    return records
+
+
+
 def extract_embedded_model_records(content: str) -> list[dict[str, Any]]:
     """Extract USAI model records embedded in the rendered SvelteKit payload.
 
@@ -433,6 +478,11 @@ def sync_usai(
         candidates = destination.parent / "pricing-candidates.json"
         tables = parse_html_tables(html_content)
         embedded_models = extract_embedded_model_records(html_content)
+
+        table_models = extract_models_from_tables(tables)
+        if table_models:
+            embedded_models.extend(table_models)
+
         write_private_json(
             candidates,
             {
@@ -445,7 +495,7 @@ def sync_usai(
         print(f"[brokerctl] saved pricing HTML to {pricing_destination}")
         print(
             f"[brokerctl] extracted {len(tables)} HTML table(s) and "
-            f"{len(embedded_models)} embedded model record(s) to {candidates}; review before applying"
+            f"{len(embedded_models)} pricing record(s) to {candidates}; review before applying"
         )
         if not tables and not embedded_models:
             print(
