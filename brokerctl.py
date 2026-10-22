@@ -830,6 +830,67 @@ def discover_usai(registry: dict[str, Any], env: dict[str, str], account_id: str
     print(f"[brokerctl] discovered {len(discovered)} USAI model(s); registry was not changed")
 
 
+def merge_pricing(registry_path: Path, pricing_candidates_path: Path, account_id: str, apply: bool) -> None:
+    registry = read_json(registry_path)
+    candidates = read_json(pricing_candidates_path)
+
+    matches = [a for a in registry.get("accounts", []) if a.get("broker") == "usai" and a.get("id") == account_id]
+    if not matches:
+        raise RegistryError(f"unknown USAI account {account_id!r}")
+    account = matches[0]
+
+    embedded_models = candidates.get("embedded_models", [])
+    if not embedded_models:
+        raise RegistryError(f"no embedded model records found in {pricing_candidates_path}")
+
+    existing_by_upstream = {m["upstream"]: m for m in account["models"]}
+
+    updated = 0
+    added = 0
+    for candidate in embedded_models:
+        upstream_id = candidate.get("Model Name", "").strip()
+        if not upstream_id:
+            continue
+
+        input_cost = candidate.get("input_cost_per_token")
+        output_cost = candidate.get("output_cost_per_token")
+        if input_cost is None or output_cost is None:
+            print(f"[brokerctl] skipping {upstream_id}: missing parsed pricing")
+            continue
+
+        if upstream_id in existing_by_upstream:
+            model = existing_by_upstream[upstream_id]
+            old_pricing = model.get("pricing", {})
+            model["pricing"] = {
+                "input_cost_per_token": input_cost,
+                "output_cost_per_token": output_cost
+            }
+            print(f"UPDATE {upstream_id}: pricing updated (was {old_pricing})")
+            updated += 1
+        else:
+            route_name = upstream_id.replace("_", "-").lower()
+            model = {
+                "route": route_name,
+                "upstream": upstream_id,
+                "pricing": {
+                    "input_cost_per_token": input_cost,
+                    "output_cost_per_token": output_cost
+                }
+            }
+            account["models"].append(model)
+            print(f"ADD {upstream_id} (route: {route_name})")
+            added += 1
+
+    if not apply:
+        print(f"[brokerctl] planned {updated} update(s) and {added} addition(s)")
+        print("[brokerctl] no changes applied (use --apply to write)")
+        return
+
+    validate(registry)
+    write_private_json(registry_path, registry)
+    print(f"[brokerctl] applied {updated} update(s) and {added} addition(s) to {registry_path}")
+
+
 def make_api(args: argparse.Namespace, env: dict[str, str]) -> Api:
     base_url = args.base_url or env.get("LITELLM_BASE_URL") or "https://localhost"
     token = args.master_key or env.get("LITELLM_MASTER_KEY")
@@ -876,12 +937,25 @@ def parser() -> argparse.ArgumentParser:
         type=Path,
         help="catalog JSON destination (default: .generated/usai/<account>/models.json)",
     )
+    merge = sub.add_parser("merge-pricing")
+    merge.add_argument("account", help="USAI account ID")
+    merge.add_argument(
+        "--pricing-candidates",
+        type=Path,
+        help="pricing-candidates.json path (default: .generated/usai/<account>/pricing-candidates.json)",
+    )
+    merge.add_argument("--apply", action="store_true", help="perform writes; otherwise show a dry-run")
     return result
 
 
 def main() -> int:
     args = parser().parse_args()
     try:
+        if args.command == "merge-pricing":
+            pricing_candidates = args.pricing_candidates or (GENERATED / "usai" / args.account / "pricing-candidates.json")
+            merge_pricing(args.registry, pricing_candidates, args.account, args.apply)
+            return 0
+
         registry = load_registry(args.registry)
         env = {**read_env(args.env_file), **os.environ}
         if args.command == "validate":
