@@ -868,7 +868,8 @@ def merge_pricing(registry_path: Path, pricing_candidates_path: Path, account_id
             print(f"UPDATE {upstream_id}: pricing updated (was {old_pricing})")
             updated += 1
         else:
-            route_name = upstream_id.replace("_", "-").lower()
+            route_name = re.sub(r"[^a-z0-9._-]", "-", upstream_id.replace("_", "-").lower())
+            route_name = re.sub(r"-+", "-", route_name).strip("-")
             model = {
                 "route": route_name,
                 "upstream": upstream_id,
