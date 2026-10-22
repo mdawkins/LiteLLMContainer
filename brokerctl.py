@@ -844,42 +844,59 @@ def merge_pricing(registry_path: Path, pricing_candidates_path: Path, account_id
         raise RegistryError(f"no embedded model records found in {pricing_candidates_path}")
 
     existing_by_upstream = {m["upstream"]: m for m in account["models"]}
+    existing_by_route = {m["route"]: m for m in account["models"]}
+
+    def normalize_route_name(name: str) -> str:
+        normalized = re.sub(r"[^a-z0-9._-]", "-", name.replace("_", "-").lower())
+        return re.sub(r"-+", "-", normalized).strip("-")
+
+    def find_existing_model(model_name: str) -> dict[str, Any] | None:
+        normalized = normalize_route_name(model_name)
+
+        if normalized in existing_by_route:
+            return existing_by_route[normalized]
+
+        for upstream, model in existing_by_upstream.items():
+            if normalize_route_name(upstream) == normalized:
+                return model
+            if upstream.lower() == normalized or upstream.replace("_", "-").lower() == normalized:
+                return model
+
+        return None
 
     updated = 0
     added = 0
     for candidate in embedded_models:
-        upstream_id = candidate.get("Model Name", "").strip()
-        if not upstream_id:
+        model_name = candidate.get("Model Name", "").strip()
+        if not model_name:
             continue
 
         input_cost = candidate.get("input_cost_per_token")
         output_cost = candidate.get("output_cost_per_token")
         if input_cost is None or output_cost is None:
-            print(f"[brokerctl] skipping {upstream_id}: missing parsed pricing")
+            print(f"[brokerctl] skipping {model_name}: missing parsed pricing")
             continue
 
-        if upstream_id in existing_by_upstream:
-            model = existing_by_upstream[upstream_id]
-            old_pricing = model.get("pricing", {})
-            model["pricing"] = {
+        existing_model = find_existing_model(model_name)
+        if existing_model:
+            existing_model["pricing"] = {
                 "input_cost_per_token": input_cost,
                 "output_cost_per_token": output_cost
             }
-            print(f"UPDATE {upstream_id}: pricing updated (was {old_pricing})")
+            print(f"UPDATE {model_name} (upstream: {existing_model['upstream']}): pricing updated")
             updated += 1
         else:
-            route_name = re.sub(r"[^a-z0-9._-]", "-", upstream_id.replace("_", "-").lower())
-            route_name = re.sub(r"-+", "-", route_name).strip("-")
+            route_name = normalize_route_name(model_name)
             model = {
                 "route": route_name,
-                "upstream": upstream_id,
+                "upstream": model_name,
                 "pricing": {
                     "input_cost_per_token": input_cost,
                     "output_cost_per_token": output_cost
                 }
             }
             account["models"].append(model)
-            print(f"ADD {upstream_id} (route: {route_name})")
+            print(f"ADD {model_name} (route: {route_name})")
             added += 1
 
     if not apply:
