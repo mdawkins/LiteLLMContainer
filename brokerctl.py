@@ -880,6 +880,38 @@ def discover_usai(registry: dict[str, Any], env: dict[str, str], account_id: str
     print(f"[brokerctl] discovered {len(discovered)} USAI model(s); registry was not changed")
 
 
+def deduplicate_models(account: dict[str, Any]) -> tuple[int, list[str]]:
+    """Remove duplicate models, keeping the one with pricing. Returns (removed_count, removed_routes)."""
+    seen_normalized = {}
+    duplicates = []
+
+    def normalize(name: str) -> str:
+        return re.sub(r"[^a-z0-9._-]", "-", name.replace("_", "-").lower())
+
+    for model in account["models"][:]:
+        normalized = normalize(model["upstream"])
+
+        if normalized in seen_normalized:
+            existing = seen_normalized[normalized]
+            # Keep the one with pricing, remove the one without
+            existing_has_pricing = bool(existing.get("pricing"))
+            current_has_pricing = bool(model.get("pricing"))
+
+            if current_has_pricing and not existing_has_pricing:
+                # Replace existing with current
+                account["models"].remove(existing)
+                seen_normalized[normalized] = model
+                duplicates.append(existing["route"])
+            elif not current_has_pricing:
+                # Remove current, keep existing
+                account["models"].remove(model)
+                duplicates.append(model["route"])
+        else:
+            seen_normalized[normalized] = model
+
+    return len(duplicates), duplicates
+
+
 def merge_pricing(registry_path: Path, pricing_candidates_path: Path, account_id: str, apply: bool) -> None:
     registry = read_json(registry_path)
     candidates = read_json(pricing_candidates_path)
@@ -954,6 +986,11 @@ def merge_pricing(registry_path: Path, pricing_candidates_path: Path, account_id
         print("[brokerctl] no changes applied (use --apply to write)")
         return
 
+    # Check for duplicates before validating
+    dup_count, dup_routes = deduplicate_models(account)
+    if dup_count:
+        print(f"[brokerctl] removed {dup_count} duplicate model(s): {', '.join(dup_routes)}")
+
     validate(registry)
     write_private_json(registry_path, registry)
     print(f"[brokerctl] applied {updated} update(s) and {added} addition(s) to {registry_path}")
@@ -1013,6 +1050,7 @@ def parser() -> argparse.ArgumentParser:
         help="pricing-candidates.json path (default: .generated/usai/<account>/pricing-candidates.json)",
     )
     merge.add_argument("--apply", action="store_true", help="perform writes; otherwise show a dry-run")
+    merge.add_argument("--deduplicate", action="store_true", help="remove duplicate models (auto-run with --apply)")
     return result
 
 
