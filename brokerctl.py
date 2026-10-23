@@ -996,8 +996,9 @@ def merge_pricing(registry_path: Path, pricing_candidates_path: Path, account_id
     print(f"[brokerctl] applied {updated} update(s) and {added} addition(s) to {registry_path}")
 
 
-def validate_deployment(api: Api, registry: dict[str, Any], insecure: bool) -> None:
-    """Validate that deployed models match registry and report pricing."""
+def validate_deployment(api: Api, registry: dict[str, Any], env: dict[str, str], account_id: str, insecure: bool) -> None:
+    """Validate deployed models match registry and USAI availability."""
+    # Fetch deployed models from LiteLLM
     try:
         deployed_response = api.request("GET", "/model/info")
     except RuntimeError as e:
@@ -1006,59 +1007,103 @@ def validate_deployment(api: Api, registry: dict[str, Any], insecure: bool) -> N
     deployed = extract_list(deployed_response, "models")
     deployed_by_name = {m.get("model_name"): m for m in deployed}
 
+    # Fetch available models from USAI
+    usai_account = next((a for a in registry.get("accounts", []) if a.get("broker") == "usai" and a.get("id") == account_id), None)
+    if not usai_account:
+        raise RegistryError(f"unknown USAI account {account_id!r}")
+
+    key_name = usai_account["api_key_env"]
+    token = os.environ.get(key_name) or env.get(key_name)
+    if not token:
+        raise RegistryError(f"{key_name} is not set")
+
+    usai_api = Api(usai_account["api_base"], token, insecure=insecure)
+    try:
+        usai_response = usai_api.request("GET", "/models")
+    except RuntimeError as e:
+        raise RegistryError(f"Failed to fetch USAI models: {e}") from e
+
+    usai_models = extract_list(usai_response, "models")
+    usai_model_ids = {str(m.get("id")) for m in usai_models if m.get("id")}
+
+    # Get registry info
     registry_routes = route_names(registry)
     deployed_names = set(deployed_by_name.keys())
     registry_names = set(registry_routes)
 
-    print(f"\n📊 Deployment vs Registry Comparison:")
-    print(f"   Deployed:  {len(deployed_names)} models")
-    print(f"   Registered: {len(registry_names)} models")
+    # Map registry upstream to USAI IDs
+    registry_upstreams = set()
+    for account in registry.get("accounts", []):
+        if account.get("broker") == "usai":
+            for model in account.get("models", []):
+                registry_upstreams.add(model.get("upstream"))
 
-    # Models in registry but not deployed
+    print(f"\n📊 Deployment Validation Report:")
+    print(f"   USAI available:  {len(usai_model_ids)} models")
+    print(f"   Registry:        {len(registry_names)} routes")
+    print(f"   Deployed:        {len(deployed_names)} models")
+
+    # Check USAI vs Registry
+    print(f"\n🔍 USAI vs Registry:")
+    usai_missing = usai_model_ids - registry_upstreams
+    if usai_missing:
+        print(f"   Available in USAI but NOT in registry ({len(usai_missing)}):")
+        for model_id in sorted(usai_missing)[:5]:
+            print(f"     - {model_id}")
+        if len(usai_missing) > 5:
+            print(f"     ... and {len(usai_missing) - 5} more")
+    else:
+        print(f"   ✓ All USAI models registered")
+
+    # Check Registry vs Deployed
+    print(f"\n🚀 Registry vs Deployed:")
     missing = registry_names - deployed_names
     if missing:
-        print(f"\n⚠️  Registered but NOT deployed ({len(missing)}):")
-        for name in sorted(missing)[:10]:
-            print(f"   - {name}")
-        if len(missing) > 10:
-            print(f"   ... and {len(missing) - 10} more")
+        print(f"   Registered but NOT deployed ({len(missing)}):")
+        for name in sorted(missing)[:5]:
+            print(f"     - {name}")
+        if len(missing) > 5:
+            print(f"     ... and {len(missing) - 5} more")
+    else:
+        print(f"   ✓ All registered models deployed")
 
-    # Models deployed but not in registry
     extra = deployed_names - registry_names
     if extra:
-        print(f"\n⚠️  Deployed but NOT registered ({len(extra)}):")
-        for name in sorted(extra)[:10]:
-            print(f"   - {name}")
-        if len(extra) > 10:
-            print(f"   ... and {len(extra) - 10} more")
+        print(f"   Deployed but NOT registered ({len(extra)}):")
+        for name in sorted(extra)[:5]:
+            print(f"     - {name}")
+        if len(extra) > 5:
+            print(f"     ... and {len(extra) - 5} more")
+    else:
+        print(f"   ✓ No stale deployed models")
 
     # Check pricing on deployed models
     print(f"\n💰 Pricing Status:")
     with_pricing = 0
-    without_pricing = 0
+    without_pricing = []
 
     for name, model in deployed_by_name.items():
         info = model_info(model)
         if info.get("input_cost_per_token"):
             with_pricing += 1
         else:
-            without_pricing += 1
+            without_pricing.append(name)
 
-    print(f"   With pricing: {with_pricing}")
-    print(f"   Without pricing: {without_pricing}")
+    print(f"   With pricing: {with_pricing}/{len(deployed_names)}")
 
-    if without_pricing > 0:
-        print(f"\n⚠️  Models without pricing:")
-        for name, model in sorted(deployed_by_name.items()):
-            info = model_info(model)
-            if not info.get("input_cost_per_token"):
-                print(f"   - {name}")
+    if without_pricing:
+        print(f"   Without pricing ({len(without_pricing)}):")
+        for name in without_pricing[:5]:
+            print(f"     - {name}")
+        if len(without_pricing) > 5:
+            print(f"     ... and {len(without_pricing) - 5} more")
+    else:
+        print(f"   ✓ All deployed models have pricing")
 
     # Summary
-    if not missing and not extra and without_pricing == 0:
-        print(f"\n✅ Deployment matches registry perfectly!")
-    else:
-        print(f"\n❌ Deployment/registry mismatch detected")
+    status = "passed" if not missing and not extra and not without_pricing and not usai_missing else "failed"
+    symbol = "✓" if status == "passed" else "✗"
+    print(f"\n{symbol} Validation {status}")
 
 
 def make_api(args: argparse.Namespace, env: dict[str, str]) -> Api:
@@ -1117,6 +1162,7 @@ def parser() -> argparse.ArgumentParser:
     merge.add_argument("--apply", action="store_true", help="perform writes; otherwise show a dry-run")
     merge.add_argument("--deduplicate", action="store_true", help="remove duplicate models (auto-run with --apply)")
     validate_deploy = sub.add_parser("validate-deployment")
+    validate_deploy.add_argument("--account", default="primary", help="USAI account ID")
     validate_deploy.add_argument("--base-url")
     validate_deploy.add_argument("--master-key")
     validate_deploy.add_argument("--insecure", action="store_true")
@@ -1157,7 +1203,7 @@ def main() -> int:
         elif args.command == "sync-usai":
             sync_usai(registry, env, args.account, args.insecure, args.pricing_html, args.output)
         elif args.command == "validate-deployment":
-            validate_deployment(make_api(args, env), registry, args.insecure)
+            validate_deployment(make_api(args, env), registry, env, args.account, args.insecure)
         return 0
     except (RegistryError, RuntimeError) as exc:
         print(f"brokerctl: {exc}", file=sys.stderr)
