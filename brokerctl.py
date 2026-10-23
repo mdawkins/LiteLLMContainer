@@ -930,8 +930,8 @@ def merge_pricing(registry_path: Path, pricing_candidates_path: Path, account_id
         existing_model = find_existing_model(model_name)
         if existing_model:
             existing_model["pricing"] = {
-                "input_cost_per_token": input_cost,
-                "output_cost_per_token": output_cost
+                "input_cost_per_token": round(input_cost, 15),
+                "output_cost_per_token": round(output_cost, 15)
             }
             print(f"UPDATE {model_name} (upstream: {existing_model['upstream']}): pricing updated")
             updated += 1
@@ -941,8 +941,8 @@ def merge_pricing(registry_path: Path, pricing_candidates_path: Path, account_id
                 "route": route_name,
                 "upstream": model_name,
                 "pricing": {
-                    "input_cost_per_token": input_cost,
-                    "output_cost_per_token": output_cost
+                    "input_cost_per_token": round(input_cost, 15),
+                    "output_cost_per_token": round(output_cost, 15)
                 }
             }
             account["models"].append(model)
