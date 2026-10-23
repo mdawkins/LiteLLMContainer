@@ -996,6 +996,71 @@ def merge_pricing(registry_path: Path, pricing_candidates_path: Path, account_id
     print(f"[brokerctl] applied {updated} update(s) and {added} addition(s) to {registry_path}")
 
 
+def validate_deployment(api: Api, registry: dict[str, Any], insecure: bool) -> None:
+    """Validate that deployed models match registry and report pricing."""
+    try:
+        deployed_response = api.request("GET", "/model/info")
+    except RuntimeError as e:
+        raise RegistryError(f"Failed to fetch deployed models: {e}") from e
+
+    deployed = extract_list(deployed_response, "models")
+    deployed_by_name = {m.get("model_name"): m for m in deployed}
+
+    registry_routes = route_names(registry)
+    deployed_names = set(deployed_by_name.keys())
+    registry_names = set(registry_routes)
+
+    print(f"\n📊 Deployment vs Registry Comparison:")
+    print(f"   Deployed:  {len(deployed_names)} models")
+    print(f"   Registered: {len(registry_names)} models")
+
+    # Models in registry but not deployed
+    missing = registry_names - deployed_names
+    if missing:
+        print(f"\n⚠️  Registered but NOT deployed ({len(missing)}):")
+        for name in sorted(missing)[:10]:
+            print(f"   - {name}")
+        if len(missing) > 10:
+            print(f"   ... and {len(missing) - 10} more")
+
+    # Models deployed but not in registry
+    extra = deployed_names - registry_names
+    if extra:
+        print(f"\n⚠️  Deployed but NOT registered ({len(extra)}):")
+        for name in sorted(extra)[:10]:
+            print(f"   - {name}")
+        if len(extra) > 10:
+            print(f"   ... and {len(extra) - 10} more")
+
+    # Check pricing on deployed models
+    print(f"\n💰 Pricing Status:")
+    with_pricing = 0
+    without_pricing = 0
+
+    for name, model in deployed_by_name.items():
+        info = model_info(model)
+        if info.get("input_cost_per_token"):
+            with_pricing += 1
+        else:
+            without_pricing += 1
+
+    print(f"   With pricing: {with_pricing}")
+    print(f"   Without pricing: {without_pricing}")
+
+    if without_pricing > 0:
+        print(f"\n⚠️  Models without pricing:")
+        for name, model in sorted(deployed_by_name.items()):
+            info = model_info(model)
+            if not info.get("input_cost_per_token"):
+                print(f"   - {name}")
+
+    # Summary
+    if not missing and not extra and without_pricing == 0:
+        print(f"\n✅ Deployment matches registry perfectly!")
+    else:
+        print(f"\n❌ Deployment/registry mismatch detected")
+
+
 def make_api(args: argparse.Namespace, env: dict[str, str]) -> Api:
     base_url = args.base_url or env.get("LITELLM_BASE_URL") or "https://localhost"
     token = args.master_key or env.get("LITELLM_MASTER_KEY")
@@ -1051,6 +1116,10 @@ def parser() -> argparse.ArgumentParser:
     )
     merge.add_argument("--apply", action="store_true", help="perform writes; otherwise show a dry-run")
     merge.add_argument("--deduplicate", action="store_true", help="remove duplicate models (auto-run with --apply)")
+    validate_deploy = sub.add_parser("validate-deployment")
+    validate_deploy.add_argument("--base-url")
+    validate_deploy.add_argument("--master-key")
+    validate_deploy.add_argument("--insecure", action="store_true")
     return result
 
 
@@ -1087,6 +1156,8 @@ def main() -> int:
             discover_usai(registry, env, args.account, args.insecure)
         elif args.command == "sync-usai":
             sync_usai(registry, env, args.account, args.insecure, args.pricing_html, args.output)
+        elif args.command == "validate-deployment":
+            validate_deployment(make_api(args, env), registry, args.insecure)
         return 0
     except (RegistryError, RuntimeError) as exc:
         print(f"brokerctl: {exc}", file=sys.stderr)
