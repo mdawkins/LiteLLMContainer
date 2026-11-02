@@ -20,6 +20,7 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import Counter
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
@@ -549,6 +550,7 @@ def desired_model(account: dict[str, Any], model: dict[str, Any]) -> dict[str, A
     }
     info.update(model.get("capabilities", {}))
     info.update(model.get("pricing", {}))
+    params.update(model.get("pricing", {}))
     if broker == "codex" and "pricing" not in model:
         info["cost_accounting"] = "subscription-cost-not-reported"
 
@@ -996,6 +998,85 @@ def merge_pricing(registry_path: Path, pricing_candidates_path: Path, account_id
     print(f"[brokerctl] applied {updated} update(s) and {added} addition(s) to {registry_path}")
 
 
+MATCH_NOISE = {"claude", "default", "latest", "guardrails"}
+
+
+def match_tokens(name: str) -> Counter:
+    words = re.sub(r"[^a-z0-9]+", " ", name.lower()).split()
+    return Counter(w for w in words if w not in MATCH_NOISE and not re.fullmatch(r"v\d+", w))
+
+
+def reconcile_usai(registry_path: Path, candidates_path: Path, catalog_path: Path, account_id: str, apply: bool) -> None:
+    """Keep only registry routes that USAI serves, and take pricing from the scraped pricing page."""
+    registry = read_json(registry_path)
+    candidates = read_json(candidates_path).get("embedded_models", [])
+    catalog = read_json(catalog_path)
+    usai_ids = sorted({str(m["id"]) for m in extract_list(catalog.get("models"), "models") if m.get("id")})
+    if not usai_ids:
+        raise RegistryError(f"no models in {catalog_path}; run sync-usai first")
+
+    matches_by_name: dict[str, str] = {}
+    priced: dict[str, dict[str, float]] = {}
+    for candidate in candidates:
+        name = str(candidate.get("Model Name", "")).strip()
+        input_cost = candidate.get("input_cost_per_token")
+        output_cost = candidate.get("output_cost_per_token")
+        if not name or input_cost is None or output_cost is None:
+            continue
+        matched = [uid for uid in usai_ids if match_tokens(uid) == match_tokens(name)]
+        if len(matched) > 1:
+            raise RegistryError(f"ambiguous USAI match for {name!r}: {', '.join(matched)}")
+        if matched:
+            priced[matched[0]] = {
+                "input_cost_per_token": round(input_cost, 15),
+                "output_cost_per_token": round(output_cost, 15),
+            }
+            matches_by_name[matched[0]] = name
+
+    account = next((a for a in registry.get("accounts", []) if a.get("broker") == "usai" and a.get("id") == account_id), None)
+    if account is None:
+        raise RegistryError(f"unknown USAI account {account_id!r}")
+
+    kept: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for model in account["models"]:
+        upstream = model["upstream"]
+        if upstream not in usai_ids:
+            print(f"REMOVE {model['route']} (upstream {upstream!r} not in USAI catalog)")
+            continue
+        if upstream in seen:
+            print(f"REMOVE {model['route']} (duplicate upstream {upstream!r})")
+            continue
+        seen.add(upstream)
+        if upstream in priced:
+            if model.get("pricing") != priced[upstream]:
+                print(f"UPDATE {model['route']} pricing from pricing page")
+            model["pricing"] = priced[upstream]
+        kept.append(model)
+
+    existing_routes = {m["route"] for m in kept}
+    for uid in usai_ids:
+        if uid in seen or uid not in priced:
+            continue
+        route = re.sub(r"-+", "-", re.sub(r"[^a-z0-9._-]", "-", matches_by_name[uid].replace("_", "-").lower())).strip("-")
+        if route in existing_routes:
+            raise RegistryError(f"cannot add {uid}: route {route!r} already exists")
+        existing_routes.add(route)
+        kept.append({"route": route, "upstream": uid, "pricing": priced[uid]})
+        print(f"ADD {route} (upstream {uid})")
+
+    unpriced = [m["route"] for m in kept if "pricing" not in m]
+    if unpriced:
+        print(f"[brokerctl] no pricing-page match for: {', '.join(unpriced)}")
+    account["models"] = kept
+    if not apply:
+        print(f"[brokerctl] planned {len(kept)} USAI route(s); no changes applied (use --apply to write)")
+        return
+    validate(registry)
+    write_private_json(registry_path, registry)
+    print(f"[brokerctl] wrote {len(kept)} USAI route(s) to {registry_path}")
+
+
 def validate_deployment(api: Api, registry: dict[str, Any], env: dict[str, str], account_id: str, insecure: bool) -> None:
     """Validate deployed models match registry and USAI availability."""
     # Fetch deployed models from LiteLLM
@@ -1161,6 +1242,11 @@ def parser() -> argparse.ArgumentParser:
     )
     merge.add_argument("--apply", action="store_true", help="perform writes; otherwise show a dry-run")
     merge.add_argument("--deduplicate", action="store_true", help="remove duplicate models (auto-run with --apply)")
+    reconcile = sub.add_parser("reconcile-usai")
+    reconcile.add_argument("account", help="USAI account ID")
+    reconcile.add_argument("--pricing-candidates", type=Path, help="default: .generated/usai/<account>/pricing-candidates.json")
+    reconcile.add_argument("--catalog", type=Path, help="default: .generated/usai/<account>/models.json")
+    reconcile.add_argument("--apply", action="store_true", help="write the registry; otherwise show a dry-run")
     validate_deploy = sub.add_parser("validate-deployment")
     validate_deploy.add_argument("--account", default="primary", help="USAI account ID")
     validate_deploy.add_argument("--base-url")
@@ -1175,6 +1261,11 @@ def main() -> int:
         if args.command == "merge-pricing":
             pricing_candidates = args.pricing_candidates or (GENERATED / "usai" / args.account / "pricing-candidates.json")
             merge_pricing(args.registry, pricing_candidates, args.account, args.apply)
+            return 0
+        if args.command == "reconcile-usai":
+            candidates = args.pricing_candidates or (GENERATED / "usai" / args.account / "pricing-candidates.json")
+            catalog = args.catalog or (GENERATED / "usai" / args.account / "models.json")
+            reconcile_usai(args.registry, candidates, catalog, args.account, args.apply)
             return 0
 
         registry = load_registry(args.registry)
