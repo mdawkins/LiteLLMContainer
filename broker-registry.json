@@ -267,7 +267,7 @@
             "output_cost_per_token": 4e-06
           },
           "route": "haiku-3.5",
-          "upstream": "claude_3_5_haiku"
+          "upstream": "claude-haiku-3.5"
         },
         {
           "capabilities": {
@@ -289,7 +289,7 @@
             "output_cost_per_token": 5e-07
           },
           "route": "haiku-5.5",
-          "upstream": "claude_5_5_haiku"
+          "upstream": "claude-haiku-5.5"
         },
         {
           "capabilities": {
@@ -311,7 +311,7 @@
             "output_cost_per_token": 7.5e-05
           },
           "route": "opus-4",
-          "upstream": "claude_opus_4"
+          "upstream": "claude-opus-4"
         },
         {
           "capabilities": {
@@ -366,7 +366,7 @@
             "output_cost_per_token": 2.2e-05
           },
           "route": "opus-5.5",
-          "upstream": "claude_5_5_opus"
+          "upstream": "claude-opus-5.5"
         },
         {
           "capabilities": {
@@ -377,7 +377,7 @@
             "output_cost_per_token": 1.5e-05
           },
           "route": "sonnet-3.5",
-          "upstream": "claude_3_5_sonnet"
+          "upstream": "claude-sonnet-3.5"
         },
         {
           "capabilities": {
@@ -388,7 +388,7 @@
             "output_cost_per_token": 1.5e-05
           },
           "route": "sonnet-3.7",
-          "upstream": "claude_3_7_sonnet"
+          "upstream": "claude-sonnet-3.7"
         },
         {
           "capabilities": {
@@ -399,7 +399,7 @@
             "output_cost_per_token": 1.5e-05
           },
           "route": "sonnet-4",
-          "upstream": "claude_sonnet_4"
+          "upstream": "claude-sonnet-4"
         },
         {
           "capabilities": {
@@ -432,7 +432,7 @@
             "output_cost_per_token": 1.1e-05
           },
           "route": "sonnet-5",
-          "upstream": "claude_sonnet_5"
+          "upstream": "claude-sonnet-5"
         },
         {
           "capabilities": {
@@ -443,7 +443,7 @@
             "output_cost_per_token": 1.1e-05
           },
           "route": "sonnet-5.5",
-          "upstream": "claude_5_5_sonnet"
+          "upstream": "claude-sonnet-5.5"
         }
       ]
     },
