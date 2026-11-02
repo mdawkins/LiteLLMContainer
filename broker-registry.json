@@ -253,7 +253,7 @@
             "output_cost_per_token": 6e-07
           },
           "route": "gemini-2-flash",
-          "upstream": "Gemini 2 Flash"
+          "upstream": "gemini-2-flash"
         },
         {
           "pricing": {
@@ -261,7 +261,7 @@
             "output_cost_per_token": 4e-06
           },
           "route": "haiku-3.5",
-          "upstream": "Haiku 3.5"
+          "upstream": "claude_3_5_haiku"
         },
         {
           "pricing": {
@@ -269,7 +269,7 @@
             "output_cost_per_token": 5.5e-06
           },
           "route": "haiku-4.5",
-          "upstream": "Haiku 4.5"
+          "upstream": "claude_4_5_haiku"
         },
         {
           "pricing": {
@@ -277,7 +277,7 @@
             "output_cost_per_token": 5e-07
           },
           "route": "haiku-5.5",
-          "upstream": "Haiku 5.5"
+          "upstream": "claude_5_5_haiku"
         },
         {
           "pricing": {
@@ -285,7 +285,7 @@
             "output_cost_per_token": 1.6e-07
           },
           "route": "llama-3.2-11b",
-          "upstream": "Llama 3.2 11B"
+          "upstream": "llama_3_2_11b"
         },
         {
           "pricing": {
@@ -293,7 +293,7 @@
             "output_cost_per_token": 7.5e-05
           },
           "route": "opus-4",
-          "upstream": "Opus 4"
+          "upstream": "claude_opus_4"
         },
         {
           "pricing": {
@@ -301,7 +301,7 @@
             "output_cost_per_token": 2.75e-05
           },
           "route": "opus-4.5",
-          "upstream": "Opus 4.5"
+          "upstream": "claude_4_5_opus"
         },
         {
           "pricing": {
@@ -309,7 +309,7 @@
             "output_cost_per_token": 2.75e-05
           },
           "route": "opus-4.7",
-          "upstream": "Opus 4.7"
+          "upstream": "claude_4_7_opus"
         },
         {
           "pricing": {
@@ -317,7 +317,7 @@
             "output_cost_per_token": 2.75e-05
           },
           "route": "opus-4.8",
-          "upstream": "Opus 4.8"
+          "upstream": "claude_4_8_opus"
         },
         {
           "pricing": {
@@ -325,7 +325,7 @@
             "output_cost_per_token": 2.75e-05
           },
           "route": "opus-5",
-          "upstream": "Opus 5"
+          "upstream": "claude_opus_5"
         },
         {
           "pricing": {
@@ -333,7 +333,7 @@
             "output_cost_per_token": 2.2e-05
           },
           "route": "opus-5.5",
-          "upstream": "Opus 5.5"
+          "upstream": "claude_5_5_opus"
         },
         {
           "pricing": {
@@ -341,7 +341,7 @@
             "output_cost_per_token": 1.5e-05
           },
           "route": "sonnet-3.5",
-          "upstream": "Sonnet 3.5"
+          "upstream": "claude_3_5_sonnet"
         },
         {
           "pricing": {
@@ -349,7 +349,7 @@
             "output_cost_per_token": 1.5e-05
           },
           "route": "sonnet-3.7",
-          "upstream": "Sonnet 3.7"
+          "upstream": "claude_3_7_sonnet"
         },
         {
           "pricing": {
@@ -357,7 +357,7 @@
             "output_cost_per_token": 1.5e-05
           },
           "route": "sonnet-4",
-          "upstream": "Sonnet 4"
+          "upstream": "claude_sonnet_4"
         },
         {
           "pricing": {
@@ -365,7 +365,7 @@
             "output_cost_per_token": 1.65e-05
           },
           "route": "sonnet-4.5",
-          "upstream": "Sonnet 4.5"
+          "upstream": "claude_4_5_sonnet"
         },
         {
           "pricing": {
@@ -373,7 +373,7 @@
             "output_cost_per_token": 1.65e-05
           },
           "route": "sonnet-4.6",
-          "upstream": "Sonnet 4.6"
+          "upstream": "claude_4_6_sonnet"
         },
         {
           "pricing": {
@@ -381,7 +381,7 @@
             "output_cost_per_token": 1.1e-05
           },
           "route": "sonnet-5",
-          "upstream": "Sonnet 5"
+          "upstream": "claude_sonnet_5"
         },
         {
           "pricing": {
@@ -389,15 +389,7 @@
             "output_cost_per_token": 1.1e-05
           },
           "route": "sonnet-5.5",
-          "upstream": "Sonnet 5.5"
-        },
-        {
-          "pricing": {
-            "input_cost_per_token": 4.4e-06,
-            "output_cost_per_token": 2.2e-05
-          },
-          "route": "claude-5.5",
-          "upstream": "Claude 5.5"
+          "upstream": "claude_5_5_sonnet"
         }
       ]
     },
