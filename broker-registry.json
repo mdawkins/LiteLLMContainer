@@ -248,6 +248,9 @@
           "upstream": "llama_4_maverick"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 1.5e-07,
             "output_cost_per_token": 6e-07
@@ -256,6 +259,9 @@
           "upstream": "gemini-2-flash"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 8e-07,
             "output_cost_per_token": 4e-06
@@ -264,6 +270,9 @@
           "upstream": "claude_3_5_haiku"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 1.1e-06,
             "output_cost_per_token": 5.5e-06
@@ -272,6 +281,9 @@
           "upstream": "claude_4_5_haiku"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 1e-07,
             "output_cost_per_token": 5e-07
@@ -280,6 +292,9 @@
           "upstream": "claude_5_5_haiku"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 1.6e-07,
             "output_cost_per_token": 1.6e-07
@@ -288,6 +303,9 @@
           "upstream": "llama_3_2_11b"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 1.5e-05,
             "output_cost_per_token": 7.5e-05
@@ -296,6 +314,9 @@
           "upstream": "claude_opus_4"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 5.5e-06,
             "output_cost_per_token": 2.75e-05
@@ -304,6 +325,9 @@
           "upstream": "claude_4_5_opus"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 5.5e-06,
             "output_cost_per_token": 2.75e-05
@@ -312,6 +336,9 @@
           "upstream": "claude_4_7_opus"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 5.5e-06,
             "output_cost_per_token": 2.75e-05
@@ -320,6 +347,9 @@
           "upstream": "claude_4_8_opus"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 5.5e-06,
             "output_cost_per_token": 2.75e-05
@@ -328,6 +358,9 @@
           "upstream": "claude_opus_5"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 4.4e-06,
             "output_cost_per_token": 2.2e-05
@@ -336,6 +369,9 @@
           "upstream": "claude_5_5_opus"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 3e-06,
             "output_cost_per_token": 1.5e-05
@@ -344,6 +380,9 @@
           "upstream": "claude_3_5_sonnet"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 3e-06,
             "output_cost_per_token": 1.5e-05
@@ -352,6 +391,9 @@
           "upstream": "claude_3_7_sonnet"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 3e-06,
             "output_cost_per_token": 1.5e-05
@@ -360,6 +402,9 @@
           "upstream": "claude_sonnet_4"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 3.3e-06,
             "output_cost_per_token": 1.65e-05
@@ -368,6 +413,9 @@
           "upstream": "claude_4_5_sonnet"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 3.3e-06,
             "output_cost_per_token": 1.65e-05
@@ -376,6 +424,9 @@
           "upstream": "claude_4_6_sonnet"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 2.2e-06,
             "output_cost_per_token": 1.1e-05
@@ -384,6 +435,9 @@
           "upstream": "claude_sonnet_5"
         },
         {
+          "capabilities": {
+            "cost_accounting": "unit-cost"
+          },
           "pricing": {
             "input_cost_per_token": 2.2e-06,
             "output_cost_per_token": 1.1e-05
