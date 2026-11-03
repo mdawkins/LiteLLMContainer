@@ -248,6 +248,16 @@
           },
           "route": "sonnet-5.5",
           "upstream": "claude-sonnet-5.5"
+        },
+        {
+          "mode": "embedding",
+          "route": "cohere-english-v3",
+          "upstream": "cohere_english_v3"
+        },
+        {
+          "mode": "embedding",
+          "route": "text-embedding-005",
+          "upstream": "text-embedding-005"
         }
       ]
     },
