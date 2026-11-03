@@ -6,6 +6,9 @@ litellm_settings:
   enable_prompt_caching: true
   drop_params: true
   modify_params: true
+  # USAI Claude routes 400 on tool history without a `tools` array; this adds
+  # an inert placeholder tool. See tool_config_shim.py.
+  callbacks: tool_config_shim.proxy_handler_instance
   # Backward-compatible Claude Code model names. These resolve to the
   # broker-qualified canonical routes before routing and access checks.
   model_alias_map:
