@@ -20,6 +20,14 @@ OLD_CODE = """        if block_type != self.current_content_block_type:
             self.current_content_block_start = content_block_start
             return True
 
+        if (
+            thinking_block_index is not None
+            and previous_thinking_block_index is not None
+            and thinking_block_index != previous_thinking_block_index
+        ):
+            self.current_content_block_start = content_block_start
+            return True
+
         # For parallel tool calls, we'll necessarily have a new content block
         # if we get a function name since it signals a new tool call
         if block_type == "tool_use":
@@ -70,6 +78,14 @@ NEW_CODE = """        if block_type == "tool_use":
             self.current_content_block_start = content_block_start
             return True
 
+        if (
+            thinking_block_index is not None
+            and previous_thinking_block_index is not None
+            and thinking_block_index != previous_thinking_block_index
+        ):
+            self.current_content_block_start = content_block_start
+            return True
+
         return False"""
 
 PATCH_MARKER = 'if tool_id != getattr(self, "_active_tool_id", None):'
@@ -105,7 +121,7 @@ def target_path() -> str:
         litellm.__path__[0],
         "llms",
         "anthropic",
-        "pass_through",
+        "messages",
         "adapters",
         "streaming_iterator.py",
     )

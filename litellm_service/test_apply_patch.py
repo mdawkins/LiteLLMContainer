@@ -42,10 +42,10 @@ class PatchContractTest(unittest.TestCase):
         with self.assertRaises(MODULE.PatchError):
             MODULE.patch_content(self.fixture(MODULE.OLD_CODE + "\n" + MODULE.OLD_CODE), "fixture.py")
 
-    def test_target_path_uses_pass_through_not_experimental(self):
-        import os
+    def test_target_path_uses_messages_not_legacy_paths(self):
         path_parts = MODULE.target_path.__code__.co_consts
-        self.assertIn("pass_through", str(path_parts))
+        self.assertIn("messages", str(path_parts))
+        self.assertNotIn("pass_through", str(path_parts))
         self.assertNotIn("experimental_pass_through", str(path_parts))
 
 
