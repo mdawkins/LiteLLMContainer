@@ -24,3 +24,4 @@ general_settings:
   store_model_in_db: true
   set_verbose: false
   disable_env_credential_login: true
+  master_key: os.environ/LITELLM_MASTER_KEY

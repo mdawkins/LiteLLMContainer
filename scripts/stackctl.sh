@@ -2,8 +2,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_COMPOSE="${SCRIPT_DIR}/compose-litellm.yaml"
-BROKER_COMPOSE="${SCRIPT_DIR}/.generated/compose-brokers.yaml"
+BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+BASE_COMPOSE="${BASE_DIR}/compose-litellm.yaml"
+BROKER_COMPOSE="${BASE_DIR}/.generated/compose-brokers.yaml"
 COMPOSE=(podman-compose -f "${BASE_COMPOSE}" -f "${BROKER_COMPOSE}")
 
 usage() {
@@ -37,8 +38,8 @@ preflight() {
 
 ensure_tls_certificate() {
     local target_ip="${HOST_IP:-}"
-    local env_file="${SCRIPT_DIR}/.env"
-    local cert_dir="${SCRIPT_DIR}/nginx_certs"
+    local env_file="${BASE_DIR}/.env"
+    local cert_dir="${BASE_DIR}/nginx_certs"
     local cert_file="${cert_dir}/proxy.crt"
     local key_file="${cert_dir}/proxy.key"
     local renew_seconds="${CERT_RENEW_SECONDS:-2592000}"
@@ -168,9 +169,9 @@ case "${command}" in
         apply_access
         ;;
     models)
-        old_fingerprint="$(cat "${SCRIPT_DIR}/.generated/runtime-fingerprint" 2>/dev/null || true)"
+        old_fingerprint="$(cat "${BASE_DIR}/.generated/runtime-fingerprint" 2>/dev/null || true)"
         render
-        new_fingerprint="$(cat "${SCRIPT_DIR}/.generated/runtime-fingerprint")"
+        new_fingerprint="$(cat "${BASE_DIR}/.generated/runtime-fingerprint")"
         if [[ -z "${old_fingerprint}" || "${old_fingerprint}" != "${new_fingerprint}" ]]; then
             echo "Provider environment/topology changed; run ./stackctl.sh reload before applying models." >&2
             exit 1

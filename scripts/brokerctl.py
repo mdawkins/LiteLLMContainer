@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_REGISTRY = ROOT / "broker-registry.json"
 DEFAULT_ENV = ROOT / ".env"
 GENERATED = ROOT / ".generated"
