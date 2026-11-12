@@ -59,7 +59,7 @@ if [[ -z "${DATABASE_URL}" ]]; then
 fi
 
 if [[ -z "${VOLUMES_VAL}" ]]; then
-    VOLUMES_DEFAULT="${VOLUMES:-${HOME}/Opt/Volumes}"
+    VOLUMES_DEFAULT="${VOLUMES:-${HOME}/Build/Volumes}"
     set_env_val "VOLUMES" "${VOLUMES_DEFAULT}"
 fi
 

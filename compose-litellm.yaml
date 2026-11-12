@@ -15,6 +15,10 @@ services:
     container_name: litellm-db
     user: "999:999"
     restart: unless-stopped
+    userns_mode: "keep-id:uid=999,gid=999"
+    security_opt:
+      - no-new-privileges:true
+      - label=disable
     environment:
       POSTGRES_DB: litellm
       POSTGRES_USER: proxy_admin
@@ -22,7 +26,7 @@ services:
     volumes:
       - ${VOLUMES}/litellm_pgvol/data:/var/lib/postgresql
     tmpfs:
-      - /var/run/postgresql:mode=0777
+      - /var/run/postgresql:U,mode=0775
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:

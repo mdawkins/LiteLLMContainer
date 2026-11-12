@@ -24,7 +24,7 @@ if [[ -f "${SCRIPT_DIR}/.env" ]]; then
     ENV_VOLUMES=$(sed -n 's/^VOLUMES=//p' "${SCRIPT_DIR}/.env" | tail -n 1)
 fi
 CONTAINERS="${CONTAINERS:-${HOME}/Build/Containers}"
-VOLUMES="${VOLUMES:-${ENV_VOLUMES:-${HOME}/Opt/Volumes}}"
+VOLUMES="${VOLUMES:-${ENV_VOLUMES:-${HOME}/Build/Volumes}}"
 export VOLUMES
 
 echo "  CONTAINERS=$CONTAINERS"
