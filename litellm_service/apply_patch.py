@@ -20,7 +20,7 @@ OLD_CODE = """        if block_type != self.current_content_block_type:
             self.current_content_block_start = content_block_start
             return True
 
-        if (
+        if follows_closed_thinking_block or (
             thinking_block_index is not None
             and previous_thinking_block_index is not None
             and thinking_block_index != previous_thinking_block_index
@@ -78,7 +78,7 @@ NEW_CODE = """        if block_type == "tool_use":
             self.current_content_block_start = content_block_start
             return True
 
-        if (
+        if follows_closed_thinking_block or (
             thinking_block_index is not None
             and previous_thinking_block_index is not None
             and thinking_block_index != previous_thinking_block_index
